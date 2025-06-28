@@ -8,6 +8,13 @@ class ResHarmonicsService {
     this.password = process.env.RH_PASSWORD;
     this.accessToken = null;
     this.tokenExpiry = null;
+    
+    // Debug logging
+    console.log('RESharmonics Service initialized with:');
+    console.log('- Auth URL:', this.authURL);
+    console.log('- Base URL:', this.baseURL);
+    console.log('- Username exists:', !!this.username);
+    console.log('- Password exists:', !!this.password);
   }
 
   async getAccessToken() {
@@ -22,22 +29,39 @@ class ResHarmonicsService {
         password: this.password
       });
 
-      console.log('Requesting new access token...');
+      console.log('Requesting new access token from:', this.authURL);
+      console.log('Auth data:', { 
+        grant_type: 'password', 
+        username: this.username?.substring(0, 5) + '...', 
+        password: this.password?.substring(0, 5) + '...' 
+      });
       
       const response = await axios.post(this.authURL, authData, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
-        }
+        },
+        timeout: 10000 // 10 second timeout
       });
 
       this.accessToken = response.data.access_token;
       this.tokenExpiry = Date.now() + (response.data.expires_in * 1000) - 60000; // 1 min buffer
       
       console.log('Access token obtained successfully');
+      console.log('Token expires in:', response.data.expires_in, 'seconds');
       return this.accessToken;
     } catch (error) {
-      console.error('Auth error:', error.response?.data || error.message);
-      throw new Error('Failed to authenticate with RES:Harmonics');
+      console.error('Auth error details:');
+      console.error('- Status:', error.response?.status);
+      console.error('- Status Text:', error.response?.statusText);
+      console.error('- Response data:', error.response?.data);
+      console.error('- Request config:', {
+        url: error.config?.url,
+        method: error.config?.method,
+        headers: error.config?.headers
+      });
+      console.error('- Error message:', error.message);
+      
+      throw new Error(`Failed to authenticate with RES:Harmonics: ${error.response?.status} ${error.response?.statusText || error.message}`);
     }
   }
 
@@ -59,18 +83,20 @@ class ResHarmonicsService {
     }
 
     try {
-      console.log(`Making ${method} request to: ${endpoint}`);
+      console.log(`Making ${method} request to: ${this.baseURL}${endpoint}`);
       const response = await axios(config);
+      console.log('Request successful, response status:', response.status);
       return response.data;
     } catch (error) {
       console.error('API Request Error:', {
         endpoint,
         method,
         status: error.response?.status,
+        statusText: error.response?.statusText,
         data: error.response?.data,
         message: error.message
       });
-      throw new Error(`RES:Harmonics API error: ${error.response?.data?.message || error.message}`);
+      throw new Error(`RES:Harmonics API error: ${error.response?.status} ${error.response?.statusText} - ${error.response?.data?.message || error.message}`);
     }
   }
 
