@@ -6,6 +6,9 @@ class ResHarmonicsService {
     this.authURL = process.env.RH_AUTH_URL;
     this.username = process.env.RH_USERNAME;
     this.password = process.env.RH_PASSWORD;
+    // PMS account credentials as client credentials
+    this.clientId = process.env.RH_CLIENT_ID || 'ammarr';
+    this.clientSecret = process.env.RH_CLIENT_SECRET || 'training280224';
     this.accessToken = null;
     this.tokenExpiry = null;
     
@@ -15,6 +18,8 @@ class ResHarmonicsService {
     console.log('- Base URL:', this.baseURL);
     console.log('- Username exists:', !!this.username);
     console.log('- Password exists:', !!this.password);
+    console.log('- Client ID:', this.clientId);
+    console.log('- Client Secret exists:', !!this.clientSecret);
   }
 
   async getAccessToken() {
@@ -23,51 +28,31 @@ class ResHarmonicsService {
     }
 
     try {
-      // Try basic auth approach first
-      console.log('Attempting Basic Auth approach...');
+      // Try OAuth2 with client credentials
+      console.log('Attempting OAuth2 with client credentials...');
       
-      try {
-        const response = await axios.post(this.authURL, 
-          new URLSearchParams({
-            grant_type: 'client_credentials'
-          }), 
-          {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'Authorization': `Basic ${Buffer.from(`${this.username}:${this.password}`).toString('base64')}`
-            },
-            timeout: 10000
-          }
-        );
-        
-        console.log('Basic Auth successful');
-        return response;
-      } catch (basicAuthError) {
-        console.log('Basic Auth failed, trying password grant...');
-        
-        // Fallback to original method
-        const authData = new URLSearchParams({
-          grant_type: 'password',
-          username: this.username,
-          password: this.password
-        });
+      const authData = new URLSearchParams({
+        grant_type: 'password',
+        username: this.username,
+        password: this.password,
+        client_id: this.clientId,
+        client_secret: this.clientSecret
+      });
 
-        console.log('Requesting new access token from:', this.authURL);
-        console.log('Auth data:', { 
-          grant_type: 'password', 
-          username: this.username?.substring(0, 5) + '...', 
-          password: this.password?.substring(0, 5) + '...' 
-        });
-        
-        const response = await axios.post(this.authURL, authData, {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          },
-          timeout: 10000 // 10 second timeout
-        });
-        
-        return response;
-      }
+      console.log('Auth request with client credentials:', {
+        grant_type: 'password',
+        username: this.username?.substring(0, 5) + '...',
+        password: this.password?.substring(0, 5) + '...',
+        client_id: this.clientId,
+        client_secret: this.clientSecret?.substring(0, 5) + '...'
+      });
+      
+      const response = await axios.post(this.authURL, authData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        timeout: 10000
+      });
 
       this.accessToken = response.data.access_token;
       this.tokenExpiry = Date.now() + (response.data.expires_in * 1000) - 60000; // 1 min buffer
