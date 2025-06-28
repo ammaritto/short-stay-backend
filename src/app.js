@@ -87,6 +87,20 @@ app.get('/', (req, res) => {
   });
 });
 
+// Add this route after your existing routes, before the 404 handler
+app.get('/test', (req, res) => {
+  res.json({ 
+    message: 'Basic test works!',
+    env_check: {
+      hasUsername: !!process.env.RH_USERNAME,
+      hasPassword: !!process.env.RH_PASSWORD,
+      hasAuthUrl: !!process.env.RH_AUTH_URL,
+      hasBaseUrl: !!process.env.RH_BASE_URL,
+      nodeEnv: process.env.NODE_ENV
+    }
+  });
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ 
