@@ -23,25 +23,51 @@ class ResHarmonicsService {
     }
 
     try {
-      const authData = new URLSearchParams({
-        grant_type: 'password',
-        username: this.username,
-        password: this.password
-      });
-
-      console.log('Requesting new access token from:', this.authURL);
-      console.log('Auth data:', { 
-        grant_type: 'password', 
-        username: this.username?.substring(0, 5) + '...', 
-        password: this.password?.substring(0, 5) + '...' 
-      });
+      // Try basic auth approach first
+      console.log('Attempting Basic Auth approach...');
       
-      const response = await axios.post(this.authURL, authData, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        timeout: 10000 // 10 second timeout
-      });
+      try {
+        const response = await axios.post(this.authURL, 
+          new URLSearchParams({
+            grant_type: 'client_credentials'
+          }), 
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Authorization': `Basic ${Buffer.from(`${this.username}:${this.password}`).toString('base64')}`
+            },
+            timeout: 10000
+          }
+        );
+        
+        console.log('Basic Auth successful');
+        return response;
+      } catch (basicAuthError) {
+        console.log('Basic Auth failed, trying password grant...');
+        
+        // Fallback to original method
+        const authData = new URLSearchParams({
+          grant_type: 'password',
+          username: this.username,
+          password: this.password
+        });
+
+        console.log('Requesting new access token from:', this.authURL);
+        console.log('Auth data:', { 
+          grant_type: 'password', 
+          username: this.username?.substring(0, 5) + '...', 
+          password: this.password?.substring(0, 5) + '...' 
+        });
+        
+        const response = await axios.post(this.authURL, authData, {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          timeout: 10000 // 10 second timeout
+        });
+        
+        return response;
+      }
 
       this.accessToken = response.data.access_token;
       this.tokenExpiry = Date.now() + (response.data.expires_in * 1000) - 60000; // 1 min buffer
