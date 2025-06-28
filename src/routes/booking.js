@@ -1,5 +1,5 @@
 const express = require('express');
-const { body } = require('express-validator');
+const { body, param } = require('express-validator');
 const { createBooking, getBooking } = require('../controllers/bookingController');
 
 const router = express.Router();
@@ -32,11 +32,23 @@ router.post('/create', [
     .withMessage('Valid unit type ID required'),
   body('stayDetails.rateId')
     .isInt({ min: 1 })
-    .withMessage('Valid rate ID required')
+    .withMessage('Valid rate ID required'),
+  body('stayDetails.adults')
+    .optional()
+    .isInt({ min: 1, max: 10 })
+    .withMessage('Adults must be between 1 and 10'),
+  body('stayDetails.children')
+    .optional()
+    .isInt({ min: 0, max: 5 })
+    .withMessage('Children must be between 0 and 5'),
+  body('stayDetails.infants')
+    .optional()
+    .isInt({ min: 0, max: 3 })
+    .withMessage('Infants must be between 0 and 3')
 ], createBooking);
 
 router.get('/:bookingId', [
-  body('bookingId').isInt({ min: 1 }).withMessage('Valid booking ID required')
+  param('bookingId').isInt({ min: 1 }).withMessage('Valid booking ID required')
 ], getBooking);
 
 module.exports = router;

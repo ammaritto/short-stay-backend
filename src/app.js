@@ -26,18 +26,25 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// CORS configuration
+// CORS configuration - Updated for Webflow
 app.use(cors({
   origin: [
     process.env.FRONTEND_URL,
+    process.env.WEBFLOW_STAGING_URL,
+    process.env.WEBFLOW_CUSTOM_DOMAIN,
     'http://localhost:3000',
+    'https://www.allihoopliving.com',
+    'https://www.allihoopliving.com',
     /\.webflow\.io$/,
     /\.webflow\.com$/
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
+// Handle preflight requests
+app.options('*', cors());
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
@@ -46,6 +53,8 @@ app.use(express.urlencoded({ extended: true }));
 // Logging
 if (process.env.NODE_ENV !== 'production') {
   app.use(morgan('dev'));
+} else {
+  app.use(morgan('combined'));
 }
 
 // Routes
@@ -57,18 +66,20 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    version: '1.0.0',
+    environment: process.env.NODE_ENV
   });
 });
 
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'Short Stay Booking API',
+    message: 'Short Stay Booking API - Allihoop',
     version: '1.0.0',
+    environment: process.env.NODE_ENV,
     endpoints: [
       'GET /api/health',
-      'GET /api/availability/search',
+      'GET /api/availability/search?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&guests=1',
       'GET /api/availability/buildings',
       'POST /api/booking/create',
       'GET /api/booking/:bookingId'
@@ -78,7 +89,11 @@ app.get('/', (req, res) => {
 
 // 404 handler
 app.use((req, res) => {
-  res.status(404).json({ error: 'Endpoint not found' });
+  res.status(404).json({ 
+    error: 'Endpoint not found',
+    path: req.path,
+    method: req.method
+  });
 });
 
 // Error handling
@@ -86,12 +101,14 @@ app.use((err, req, res, next) => {
   console.error('Error:', err.stack);
   res.status(500).json({ 
     error: 'Something went wrong!',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
+    timestamp: new Date().toISOString()
   });
 });
 
 const PORT = process.env.PORT || 3000;
 
+// Only start server in non-production (for local development)
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
