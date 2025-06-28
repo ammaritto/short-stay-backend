@@ -2,11 +2,17 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
+// Import routes
+const availabilityRoutes = require('./src/routes/availability');
+
 const app = express();
 
 // Basic middleware
 app.use(cors());
 app.use(express.json());
+
+// Add availability routes
+app.use('/api/availability', availabilityRoutes);
 
 // Test routes
 app.get('/', (req, res) => {
