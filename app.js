@@ -6,8 +6,8 @@ const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 require('dotenv').config();
 
-const availabilityRoutes = require('./routes/availability');
-const bookingRoutes = require('./routes/booking');
+const availabilityRoutes = require('./src/routes/availability');
+const bookingRoutes = require('./src/routes/booking');
 
 const app = express();
 
