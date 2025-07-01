@@ -4,11 +4,9 @@ class ResHarmonicsService {
   constructor() {
     this.baseURL = process.env.RH_BASE_URL;
     this.authURL = process.env.RH_AUTH_URL;
-    this.username = process.env.RH_USERNAME;
-    this.password = process.env.RH_PASSWORD;
-    // PMS account credentials as client credentials
-    this.clientId = process.env.RH_CLIENT_ID || 'ammarr';
-    this.clientSecret = process.env.RH_CLIENT_SECRET || 'training280224';
+    this.clientId = process.env.RH_CLIENT_ID;
+    this.clientSecret = process.env.RH_CLIENT_SECRET;
+    this.scope = process.env.RH_SCOPE || 'api/read api/write';
     this.accessToken = null;
     this.tokenExpiry = null;
     
@@ -16,42 +14,40 @@ class ResHarmonicsService {
     console.log('RESharmonics Service initialized with:');
     console.log('- Auth URL:', this.authURL);
     console.log('- Base URL:', this.baseURL);
-    console.log('- Username exists:', !!this.username);
-    console.log('- Password exists:', !!this.password);
-    console.log('- Client ID:', this.clientId);
+    console.log('- Client ID exists:', !!this.clientId);
     console.log('- Client Secret exists:', !!this.clientSecret);
+    console.log('- Scope:', this.scope);
   }
 
   async getAccessToken() {
     if (this.accessToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
+      console.log('Using cached access token');
       return this.accessToken;
     }
 
     try {
-      // Try OAuth2 with client credentials
-      console.log('Attempting OAuth2 with client credentials...');
+      console.log('Requesting new access token using OAuth2 Client Credentials...');
       
+      // OAuth2 Client Credentials flow (matching your Postman setup)
       const authData = new URLSearchParams({
-        grant_type: 'password',
-        username: this.username,
-        password: this.password,
-        client_id: this.clientId,
-        client_secret: this.clientSecret
+        grant_type: 'client_credentials',
+        scope: this.scope
       });
 
-      console.log('Auth request with client credentials:', {
-        grant_type: 'password',
-        username: this.username?.substring(0, 5) + '...',
-        password: this.password?.substring(0, 5) + '...',
-        client_id: this.clientId,
-        client_secret: this.clientSecret?.substring(0, 5) + '...'
+      console.log('Auth request data:', {
+        grant_type: 'client_credentials',
+        scope: this.scope,
+        client_id: this.clientId?.substring(0, 5) + '...',
+        using_basic_auth: true
       });
       
       const response = await axios.post(this.authURL, authData, {
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
+          'Content-Type': 'application/x-www-form-urlencoded',
+          // Send client credentials as Basic Auth header (matching Postman)
+          'Authorization': `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64')}`
         },
-        timeout: 10000
+        timeout: 15000
       });
 
       this.accessToken = response.data.access_token;
@@ -59,17 +55,16 @@ class ResHarmonicsService {
       
       console.log('Access token obtained successfully');
       console.log('Token expires in:', response.data.expires_in, 'seconds');
+      console.log('Token type:', response.data.token_type);
+      
       return this.accessToken;
     } catch (error) {
-      console.error('Auth error details:');
+      console.error('OAuth2 Authentication Error:');
+      console.error('- URL:', this.authURL);
       console.error('- Status:', error.response?.status);
       console.error('- Status Text:', error.response?.statusText);
-      console.error('- Response data:', error.response?.data);
-      console.error('- Request config:', {
-        url: error.config?.url,
-        method: error.config?.method,
-        headers: error.config?.headers
-      });
+      console.error('- Response data:', JSON.stringify(error.response?.data, null, 2));
+      console.error('- Request headers:', error.config?.headers);
       console.error('- Error message:', error.message);
       
       throw new Error(`Failed to authenticate with RES:Harmonics: ${error.response?.status} ${error.response?.statusText || error.message}`);
@@ -86,7 +81,7 @@ class ResHarmonicsService {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      timeout: 30000 // 30 second timeout
+      timeout: 30000
     };
 
     if (data) {
@@ -128,12 +123,17 @@ class ResHarmonicsService {
     return await this.makeRequest('/api/v3/buildings');
   }
 
+  // Get areas (like in your Postman)
+  async getAreas() {
+    return await this.makeRequest('/api/v3/areas');
+  }
+
   // Get unit types
   async getUnitTypes() {
     return await this.makeRequest('/api/v3/unitTypes');
   }
 
-  // Create booking (simplified without payment)
+  // Create booking
   async createBooking(bookingData) {
     return await this.makeRequest('/api/v3/bookings', 'POST', bookingData);
   }
