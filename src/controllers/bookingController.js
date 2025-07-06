@@ -29,6 +29,15 @@ const createBooking = async (req, res) => {
       console.log('Creating contact...');
       contact = await resHarmonicsService.createContact(contactData);
       console.log('Contact created:', contact.id);
+      
+      // Verify contact has email and phone
+      if (!contact.contactEmailAddresses || contact.contactEmailAddresses.length === 0) {
+        console.warn('WARNING: Contact created but email addresses missing');
+      }
+      if (!contact.contactTelephoneNumbers || contact.contactTelephoneNumbers.length === 0) {
+        console.warn('WARNING: Contact created but telephone numbers missing');
+      }
+      
     } catch (contactError) {
       console.error('Contact creation failed:', contactError.message);
       return res.status(400).json({
