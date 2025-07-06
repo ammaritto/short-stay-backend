@@ -15,31 +15,22 @@ const createBooking = async (req, res) => {
 
     console.log('Creating booking for:', guestDetails.email);
 
-    // Step 1: Create contact in RES:Harmonics
-    const contactData = {
-      firstName: guestDetails.firstName,
-      lastName: guestDetails.lastName,
-      contactEmailAddresses: [{
-        email: guestDetails.email,
-        primary: true
-      }]
-    };
+// Step 1: Create contact in RES:Harmonics
+const contactData = {
+  firstName: guestDetails.firstName,
+  lastName: guestDetails.lastName,
+  email: guestDetails.email, // Use 'email' key for consistency
+  phone: guestDetails.phone || null
+};
 
-    if (guestDetails.phone) {
-      contactData.contactTelephoneNumbers = [{
-        number: guestDetails.phone,
-        primary: true
-      }];
-    }
-
-    let contact;
-    try {
-      contact = await resHarmonicsService.createContact(contactData);
-      console.log('Contact created:', contact.id);
-    } catch (error) {
-      console.error('Contact creation failed:', error.message);
-      // Continue without contact creation if it fails
-    }
+let contact;
+try {
+  contact = await resHarmonicsService.createContact(contactData);
+  console.log('Contact created:', contact.id);
+} catch (error) {
+  console.error('Contact creation failed:', error.message);
+  // Continue without contact creation if it fails
+}
 
     // Step 2: Create booking with correct RES:Harmonics format
     const bookingData = {
