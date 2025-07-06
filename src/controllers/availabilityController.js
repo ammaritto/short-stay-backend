@@ -10,7 +10,6 @@ const searchAvailability = async (req, res) => {
         errors: errors.array() 
       });
     }
-
     const { startDate, endDate, guests } = req.query;
     
     console.log('Searching availability:', { startDate, endDate, guests });
@@ -22,26 +21,34 @@ const searchAvailability = async (req, res) => {
       inventoryType: 'UNIT_TYPE'
     });
 
-    // Transform the data for frontend consumption
-    const transformedData = availability.content?.map(property => ({
-      buildingId: property.buildingId,
-      buildingName: property.buildingName,
-      inventoryType: property.inventoryType,
-      inventoryTypeId: property.inventoryTypeId,
-      inventoryTypeName: property.inventoryTypeName,
-      rates: property.rateAvailabilities?.map(rate => ({
-        rateId: rate.rateId,
-        rateCode: rate.rateCode,  // Add this line
-        rateName: rate.shortName || rate.description,
-        currency: rate.currencyCode,
-        currencySymbol: rate.currencySymbol,
-        totalPrice: rate.totals,
-        avgNightlyRate: rate.avgRate,
-        nights: rate.nights,
-        description: rate.webDescription || rate.description,
-        bookingTerms: rate.bookingTerms
-      })) || []
-    })) || [];
+    // Transform the data for frontend consumption and filter for -WEB rates only
+    const transformedData = availability.content?.map(property => {
+      // Filter rates to only include those with rateCode containing "-WEB"
+      const webRates = property.rateAvailabilities?.filter(rate => 
+        rate.rateCode && rate.rateCode.includes('-WEB')
+      ) || [];
+
+      return {
+        buildingId: property.buildingId,
+        buildingName: property.buildingName,
+        inventoryType: property.inventoryType,
+        inventoryTypeId: property.inventoryTypeId,
+        inventoryTypeName: property.inventoryTypeName,
+        rates: webRates.map(rate => ({
+          rateId: rate.rateId,
+          rateCode: rate.rateCode,
+          rateName: rate.shortName || rate.description,
+          currency: rate.currencyCode,
+          currencySymbol: rate.currencySymbol,
+          totalPrice: rate.totals,
+          avgNightlyRate: rate.avgRate,
+          nights: rate.nights,
+          description: rate.webDescription || rate.description,
+          bookingTerms: rate.bookingTerms
+        }))
+      };
+    })
+    .filter(property => property.rates.length > 0) || []; // Only include properties that have -WEB rates
 
     res.json({
       success: true,
