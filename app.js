@@ -4,6 +4,7 @@ require('dotenv').config();
 
 // Import routes
 const availabilityRoutes = require('./src/routes/availability');
+const bookingRoutes = require('./src/routes/booking');
 
 const app = express();
 
@@ -13,6 +14,9 @@ app.use(express.json());
 
 // Add availability routes
 app.use('/api/availability', availabilityRoutes);
+
+// Add booking routes
+app.use('/api/booking', bookingRoutes);
 
 // Test routes
 app.get('/', (req, res) => {
