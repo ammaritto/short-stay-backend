@@ -19,17 +19,17 @@ const createBooking = async (req, res) => {
     const contactData = {
       firstName: guestDetails.firstName,
       lastName: guestDetails.lastName,
-      primaryContactEmailAddress: {
+      contactEmailAddresses: [{
         email: guestDetails.email,
         primary: true
-      }
+      }]
     };
 
     if (guestDetails.phone) {
-      contactData.primaryContactTelephoneNumber = {
+      contactData.contactTelephoneNumbers = [{
         number: guestDetails.phone,
         primary: true
-      };
+      }];
     }
 
     let contact;
@@ -38,30 +38,35 @@ const createBooking = async (req, res) => {
       console.log('Contact created:', contact.id);
     } catch (error) {
       console.error('Contact creation failed:', error.message);
-      // If contact creation fails, we'll continue without it
-      // The booking API might still work
+      // Continue without contact creation if it fails
     }
 
-// Step 2: Create booking
-const bookingData = {
-  bookingContactId: contact?.id || 1, // Fallback to existing contact ID
-  billingContactId: contact?.id || 1,
-  bookingFinanceAccountId: contact?.contactSalesAccount?.id || 1,
-  billingFinanceAccountId: contact?.contactSalesAccount?.id || 1,
-  billingFrequencyId: 1, // Monthly billing
-  bookingTypeId: 1, // Standard booking type
-  channelId: 1, // Direct booking channel
-  roomStays: [{
-    startDate: stayDetails.startDate,
-    endDate: stayDetails.endDate,
-    inventoryType: stayDetails.inventoryType || 'UNIT_TYPE',
-    inventoryTypeId: parseInt(stayDetails.inventoryTypeId),
-    rateId: parseInt(stayDetails.rateId),
-    numberOfAdults: parseInt(stayDetails.adults) || 1,
-    numberOfChildren: parseInt(stayDetails.children) || 0,
-    numberOfInfants: parseInt(stayDetails.infants) || 0
-  }]
-};
+    // Step 2: Create booking with correct RES:Harmonics format
+    const bookingData = {
+      bookingContactId: contact?.id || null,
+      billingContactId: contact?.id || null,
+      bookingSource: "DIRECT", // Source of the booking
+      bookingType: "STANDARD", // Type of booking
+      currency: "GBP", // Default currency
+      roomStays: [{
+        arrivalDate: stayDetails.startDate,
+        departureDate: stayDetails.endDate,
+        inventoryTypeId: parseInt(stayDetails.inventoryTypeId),
+        rateId: parseInt(stayDetails.rateId),
+        guestCounts: {
+          adults: parseInt(stayDetails.adults) || 1,
+          children: parseInt(stayDetails.children) || 0,
+          infants: parseInt(stayDetails.infants) || 0
+        }
+      }],
+      // Guest information for the primary guest
+      primaryGuest: {
+        firstName: guestDetails.firstName,
+        lastName: guestDetails.lastName,
+        emailAddress: guestDetails.email,
+        phoneNumber: guestDetails.phone || null
+      }
+    };
 
     console.log('Creating booking with data:', JSON.stringify(bookingData, null, 2));
 
@@ -70,15 +75,15 @@ const bookingData = {
 
     console.log('Booking created:', booking.id);
 
-    // Step 3: Update booking status to confirmed (no payment required)
+    // Step 3: Update booking status to ENQUIRY (as requested)
     try {
       await resHarmonicsService.updateBookingStatus(booking.id, {
         statusUpdates: [{
           roomStayId: booking.roomStays?.[0]?.id,
-          status: 'CONFIRMED'
+          status: 'ENQUIRY' // Changed from CONFIRMED to ENQUIRY as requested
         }]
       });
-      console.log('Booking status updated to CONFIRMED');
+      console.log('Booking status updated to ENQUIRY');
     } catch (statusError) {
       console.error('Failed to update booking status:', statusError.message);
       // Continue even if status update fails
@@ -89,7 +94,7 @@ const bookingData = {
       data: {
         bookingId: booking.id,
         bookingReference: booking.bookingReference,
-        status: 'confirmed',
+        status: 'enquiry',
         guestName: `${guestDetails.firstName} ${guestDetails.lastName}`,
         checkIn: stayDetails.startDate,
         checkOut: stayDetails.endDate
