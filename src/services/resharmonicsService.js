@@ -148,32 +148,33 @@ class ResHarmonicsService {
     return await this.makeRequest(`/api/v3/bookings/${bookingId}`);
   }
 
-// Create contact
-async createContact(contactData) {
-  // Updated contact structure to match RES:Harmonics API
-  const contactPayload = {
-    firstName: contactData.firstName,
-    lastName: contactData.lastName,
-    contactEmailAddresses: contactData.contactEmailAddresses || [{
-      email: contactData.email || contactData.emailAddress,
-      primary: true,
-      type: "PERSONAL"
-    }],
-    contactTelephoneNumbers: contactData.contactTelephoneNumbers || (contactData.phone ? [{
-      number: contactData.phone || contactData.phoneNumber,
-      primary: true,
-      type: "MOBILE"
-    }] : []),
-    contactType: "GUEST", // Specify contact type
-    title: contactData.title || null,
-    dateOfBirth: contactData.dateOfBirth || null,
-    nationality: contactData.nationality || null,
-    contactAddresses: contactData.contactAddresses || [] // Empty array if no address
-  };
+  // Create contact
+  async createContact(contactData) {
+    // Updated contact structure to match RES:Harmonics API
+    const contactPayload = {
+      firstName: contactData.firstName,
+      lastName: contactData.lastName,
+      contactEmailAddresses: contactData.contactEmailAddresses || [{
+        email: contactData.email || contactData.emailAddress,
+        primary: true,
+        type: "PERSONAL"
+      }],
+      contactTelephoneNumbers: contactData.contactTelephoneNumbers || (contactData.phone ? [{
+        number: contactData.phone || contactData.phoneNumber,
+        primary: true,
+        type: "MOBILE"
+      }] : []),
+      contactType: "GUEST", // Specify contact type
+      title: contactData.title || null,
+      dateOfBirth: contactData.dateOfBirth || null,
+      nationality: contactData.nationality || null,
+      contactAddresses: contactData.contactAddresses || [] // Empty array if no address
+    };
 
-  console.log('Creating contact with payload:', JSON.stringify(contactPayload, null, 2));
-  
-  return await this.makeRequest('/api/v3/contacts', 'POST', contactPayload);
+    console.log('Creating contact with payload:', JSON.stringify(contactPayload, null, 2));
+    
+    return await this.makeRequest('/api/v3/contacts', 'POST', contactPayload);
+  }
 }
 
 module.exports = new ResHarmonicsService();
