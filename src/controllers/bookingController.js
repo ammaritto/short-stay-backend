@@ -16,7 +16,7 @@ const createBooking = async (req, res) => {
     console.log('Creating booking for:', guestDetails.email);
     console.log('Stay details:', JSON.stringify(stayDetails, null, 2));
 
-    // Step 1: Create contact first (this should work as per your existing code)
+    // Step 1: Create contact (this works perfectly)
     let contact = null;
     try {
       const contactData = {
@@ -31,105 +31,112 @@ const createBooking = async (req, res) => {
       console.log('Contact created:', contact.id);
     } catch (contactError) {
       console.error('Contact creation failed:', contactError.message);
-      // Continue without contact for now
+      return res.status(400).json({
+        success: false,
+        error: 'Failed to create contact',
+        message: contactError.message
+      });
     }
 
-    // Step 2: Create booking with proper RES:Harmonics format
-    // Based on the API documentation structure
+    // Step 2: Create booking with EXACT RES:Harmonics API structure
     const bookingPayload = {
-      // Guest/Contact information
-      bookingContactId: contact?.id || null,
-      billingContactId: contact?.id || null,
+      // Required contact IDs
+      bookingContactId: contact.id,
+      billingContactId: contact.id,
       
-      // Room stays array - this is the key part
+      // Required finance account IDs (using contact's account or defaults)
+      bookingFinanceAccountId: contact.contactSalesAccount?.id || 1,
+      billingFinanceAccountId: contact.contactSalesAccount?.id || 1,
+      
+      // Required IDs with defaults
+      billingFrequencyId: 1, // Default billing frequency
+      bookingTypeId: 1, // Default booking type
+      channelId: 1, // Default channel (direct booking)
+      
+      // Optional fields
+      customerReference: `WEB-${Date.now()}`,
+      notes: `Booking created via web portal for ${guestDetails.firstName} ${guestDetails.lastName}`,
+      reserveForMinutes: 60, // Hold availability for 1 hour
+      
+      // Room stays array - EXACTLY as per API documentation
       roomStays: [{
-        // Date information
-        arrivalDate: stayDetails.startDate,
-        departureDate: stayDetails.endDate,
+        // Required dates
+        startDate: stayDetails.startDate,
+        endDate: stayDetails.endDate,
         
-        // Inventory and rate
+        // Required inventory information
+        inventoryType: "UNIT_TYPE", // Using unit type booking
         inventoryTypeId: parseInt(stayDetails.inventoryTypeId),
+        
+        // Required rate
         rateId: parseInt(stayDetails.rateId),
         
-        // Guest counts
-        guestCounts: {
-          adults: parseInt(stayDetails.adults) || 1,
-          children: parseInt(stayDetails.children) || 0,
-          infants: parseInt(stayDetails.infants) || 0
-        },
-        
-        // Required booking fields
+        // Required guest counts
         numberOfAdults: parseInt(stayDetails.adults) || 1,
         numberOfChildren: parseInt(stayDetails.children) || 0,
-        numberOfInfants: parseInt(stayDetails.infants) || 0
-      }],
-      
-      // Booking metadata
-      bookingSource: "DIRECT",
-      bookingType: "STANDARD",
-      
-      // Guest details (alternative format in case contact creation failed)
-      primaryGuest: {
-        firstName: guestDetails.firstName,
-        lastName: guestDetails.lastName,
-        emailAddress: guestDetails.email,
-        phoneNumber: guestDetails.phone || null
-      },
-      
-      // Currency and status
-      currency: "GBP",
-      status: "ENQUIRY"
+        numberOfInfants: parseInt(stayDetails.infants) || 0,
+        
+        // Optional guest assignment
+        guestIds: [contact.id],
+        
+        // Optional notes
+        externalNotes: `Web booking for ${guestDetails.firstName} ${guestDetails.lastName}`
+      }]
     };
 
-    console.log('Creating booking with payload:', JSON.stringify(bookingPayload, null, 2));
+    console.log('Correct booking payload:', JSON.stringify(bookingPayload, null, 2));
 
     // Create the booking
     const booking = await resHarmonicsService.createBooking(bookingPayload);
 
-    console.log('Booking created successfully:', {
-      id: booking.id,
-      reference: booking.bookingReference,
-      status: booking.status
-    });
+    console.log('Booking created successfully:', booking);
+
+    // Step 3: Update status to ENQUIRY (as requested)
+    try {
+      if (booking.roomStays && booking.roomStays.length > 0) {
+        const roomStayId = booking.roomStays[0].id;
+        await resHarmonicsService.updateBookingStatus(booking.id, {
+          statusUpdates: [{
+            roomStayId: roomStayId,
+            status: 'ENQUIRY'
+          }]
+        });
+        console.log('Booking status updated to ENQUIRY');
+      }
+    } catch (statusError) {
+      console.error('Failed to update booking status:', statusError.message);
+      // Continue even if status update fails - booking was created successfully
+    }
 
     // Return success response
     res.json({
       success: true,
       data: {
         bookingId: booking.id,
-        bookingReference: booking.bookingReference || booking.id,
+        bookingReference: booking.bookingReference,
         status: 'enquiry',
         guestName: `${guestDetails.firstName} ${guestDetails.lastName}`,
         checkIn: stayDetails.startDate,
-        checkOut: stayDetails.endDate
+        checkOut: stayDetails.endDate,
+        contactId: contact.id
       }
     });
 
   } catch (error) {
-    console.error('Create booking error:', error);
-    
-    // Extract specific API error information
-    let errorMessage = 'Failed to create booking';
-    let statusCode = 500;
-    
-    if (error.message) {
-      if (error.message.includes('400')) {
-        statusCode = 400;
-        errorMessage = 'Invalid booking data format';
-      } else if (error.message.includes('401') || error.message.includes('403')) {
-        statusCode = 401;
-        errorMessage = 'Authentication failed';
-      } else if (error.message.includes('RES:Harmonics API error')) {
-        errorMessage = error.message;
-      }
-    }
-    
-    res.status(statusCode).json({ 
-      success: false, 
-      error: errorMessage,
+    console.error('Create booking error details:', {
       message: error.message,
-      // Include the payload for debugging (remove in production)
-      debugPayload: req.body
+      requestBody: req.body
+    });
+    
+    res.status(400).json({ 
+      success: false, 
+      error: 'Failed to create booking',
+      message: error.message,
+      debug: {
+        contactCreated: !!contact,
+        contactId: contact?.id,
+        errorDetails: error.message
+      }
     });
   }
 };
