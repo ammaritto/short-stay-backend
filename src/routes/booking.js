@@ -4,6 +4,15 @@ const { createBooking, getBooking } = require('../controllers/bookingController'
 
 const router = express.Router();
 
+// Test route
+router.get('/test', (req, res) => {
+  res.json({ 
+    message: 'Booking routes are working!', 
+    timestamp: new Date().toISOString() 
+  });
+});
+
+// POST /api/booking/create - SPECIFIC ROUTES FIRST
 router.post('/create', [
   body('guestDetails.firstName')
     .trim()
@@ -19,7 +28,6 @@ router.post('/create', [
     .withMessage('Valid email is required'),
   body('guestDetails.phone')
     .optional()
-    .isMobilePhone()
     .withMessage('Valid phone number required'),
   body('stayDetails.startDate')
     .isISO8601()
@@ -47,6 +55,7 @@ router.post('/create', [
     .withMessage('Infants must be between 0 and 3')
 ], createBooking);
 
+// GET /api/booking/:bookingId - PARAMETERIZED ROUTES LAST
 router.get('/:bookingId', [
   param('bookingId').isInt({ min: 1 }).withMessage('Valid booking ID required')
 ], getBooking);
