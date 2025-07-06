@@ -105,14 +105,84 @@ class ResHarmonicsService {
   }
 
   async searchAvailability({ dateFrom, dateTo, guests = 1, inventoryType = 'UNIT_TYPE' }) {
-    const params = new URLSearchParams({
-      dateFrom,
-      dateTo,
-      guests: guests.toString(),
-      inventoryType
-    });
+    const webRateCodes = ['BRO-SP-WEB', 'BRO-S-WEB', 'ANG-S-WEB'];
+    console.log('Searching availability for WEB rate codes:', webRateCodes);
     
-    return await this.makeRequest(`/api/v3/availabilities?${params}`);
+    const allResults = [];
+    const failedRateCodes = [];
+    
+    for (const rateCode of webRateCodes) {
+      try {
+        console.log(`Fetching availability for rate code: ${rateCode}`);
+        
+        const params = new URLSearchParams({
+          dateFrom,
+          dateTo,
+          guests: guests.toString(),
+          inventoryType,
+          rateCode
+        });
+        
+        const result = await this.makeRequest(`/api/v3/availabilities?${params}`);
+        
+        if (result.content && result.content.length > 0) {
+          console.log(`Found ${result.content.length} properties for rate code: ${rateCode}`);
+          allResults.push(...result.content);
+        } else {
+          console.log(`No availability found for rate code: ${rateCode}`);
+        }
+        
+      } catch (error) {
+        console.warn(`Failed to get availability for rate code ${rateCode}:`, error.message);
+        failedRateCodes.push(rateCode);
+      }
+    }
+    
+    if (failedRateCodes.length > 0) {
+      console.warn('Failed rate codes:', failedRateCodes);
+    }
+    
+    // Remove duplicates based on buildingId + inventoryTypeId + rateId combination
+    const uniqueResults = [];
+    const seen = new Set();
+    
+    for (const property of allResults) {
+      for (const rate of property.rateAvailabilities || []) {
+        const key = `${property.buildingId}-${property.inventoryTypeId}-${rate.rateId}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          
+          // Find if we already have this property in uniqueResults
+          let existingProperty = uniqueResults.find(p => 
+            p.buildingId === property.buildingId && 
+            p.inventoryTypeId === property.inventoryTypeId
+          );
+          
+          if (existingProperty) {
+            // Add the rate to existing property
+            existingProperty.rateAvailabilities.push(rate);
+          } else {
+            // Create new property with this rate
+            uniqueResults.push({
+              ...property,
+              rateAvailabilities: [rate]
+            });
+          }
+        }
+      }
+    }
+    
+    console.log(`Total unique properties with WEB rates: ${uniqueResults.length}`);
+    
+    return {
+      content: uniqueResults,
+      total: uniqueResults.length,
+      searchInfo: {
+        searchedRateCodes: webRateCodes,
+        failedRateCodes: failedRateCodes,
+        totalPropertiesFound: uniqueResults.length
+      }
+    };
   }
 
   async getBuildings() {
