@@ -15,30 +15,11 @@ const createBooking = async (req, res) => {
 
     console.log('Creating booking for:', guestDetails.email);
 
-// Step 1: Create contact in RES:Harmonics
-const contactData = {
-  firstName: guestDetails.firstName,
-  lastName: guestDetails.lastName,
-  email: guestDetails.email, // Use 'email' key for consistency
-  phone: guestDetails.phone || null
-};
+    // Skip contact creation for now and focus on booking
+    // We'll use a minimal booking payload that matches RES:Harmonics API
 
-let contact;
-try {
-  contact = await resHarmonicsService.createContact(contactData);
-  console.log('Contact created:', contact.id);
-} catch (error) {
-  console.error('Contact creation failed:', error.message);
-  // Continue without contact creation if it fails
-}
-
-    // Step 2: Create booking with correct RES:Harmonics format
+    // Simplified booking data structure based on RES:Harmonics API documentation
     const bookingData = {
-      bookingContactId: contact?.id || null,
-      billingContactId: contact?.id || null,
-      bookingSource: "DIRECT", // Source of the booking
-      bookingType: "STANDARD", // Type of booking
-      currency: "GBP", // Default currency
       roomStays: [{
         arrivalDate: stayDetails.startDate,
         departureDate: stayDetails.endDate,
@@ -50,41 +31,28 @@ try {
           infants: parseInt(stayDetails.infants) || 0
         }
       }],
-      // Guest information for the primary guest
-      primaryGuest: {
+      guest: {
         firstName: guestDetails.firstName,
         lastName: guestDetails.lastName,
         emailAddress: guestDetails.email,
-        phoneNumber: guestDetails.phone || null
-      }
+        telephoneNumber: guestDetails.phone || null
+      },
+      source: "ONLINE",
+      status: "ENQUIRY"
     };
 
-    console.log('Creating booking with data:', JSON.stringify(bookingData, null, 2));
+    console.log('Creating booking with simplified data:', JSON.stringify(bookingData, null, 2));
 
     // Create the booking
     const booking = await resHarmonicsService.createBooking(bookingData);
 
-    console.log('Booking created:', booking.id);
-
-    // Step 3: Update booking status to ENQUIRY (as requested)
-    try {
-      await resHarmonicsService.updateBookingStatus(booking.id, {
-        statusUpdates: [{
-          roomStayId: booking.roomStays?.[0]?.id,
-          status: 'ENQUIRY' // Changed from CONFIRMED to ENQUIRY as requested
-        }]
-      });
-      console.log('Booking status updated to ENQUIRY');
-    } catch (statusError) {
-      console.error('Failed to update booking status:', statusError.message);
-      // Continue even if status update fails
-    }
+    console.log('Booking created successfully:', booking.id);
 
     res.json({
       success: true,
       data: {
         bookingId: booking.id,
-        bookingReference: booking.bookingReference,
+        bookingReference: booking.bookingReference || booking.id,
         status: 'enquiry',
         guestName: `${guestDetails.firstName} ${guestDetails.lastName}`,
         checkIn: stayDetails.startDate,
@@ -94,9 +62,16 @@ try {
 
   } catch (error) {
     console.error('Create booking error:', error);
+    
+    // Extract more specific error information
+    let errorMessage = 'Failed to create booking';
+    if (error.message && error.message.includes('RES:Harmonics API error')) {
+      errorMessage = error.message;
+    }
+    
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to create booking',
+      error: errorMessage,
       message: error.message 
     });
   }
