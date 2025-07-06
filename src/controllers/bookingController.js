@@ -1,46 +1,35 @@
-const { validationResult } = require('express-validator');
-const resHarmonicsService = require('../services/resharmonicsService');
-
 const createBooking = async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ 
-        success: false,
-        errors: errors.array() 
-      });
-    }
-
     const { guestDetails, stayDetails } = req.body;
 
-    console.log('Creating booking for:', guestDetails.email);
-    console.log('Stay details:', JSON.stringify(stayDetails, null, 2));
+    console.log('Booking request received:', {
+      guest: guestDetails?.firstName + ' ' + guestDetails?.lastName,
+      email: guestDetails?.email,
+      checkIn: stayDetails?.startDate,
+      checkOut: stayDetails?.endDate,
+      inventoryTypeId: stayDetails?.inventoryTypeId,
+      rateId: stayDetails?.rateId
+    });
 
-    // For now, let's just return a mock success response to test the flow
-    // Once we confirm this works, we'll add the actual API call
-    
-    const mockBookingResponse = {
-      id: Math.floor(Math.random() * 10000),
-      bookingReference: `BK${Math.floor(Math.random() * 100000)}`,
-      status: 'ENQUIRY'
+    // Return a mock success response for now
+    const mockBooking = {
+      bookingId: 'BK' + Date.now(),
+      bookingReference: 'REF' + Math.floor(Math.random() * 10000),
+      status: 'enquiry',
+      guestName: `${guestDetails.firstName} ${guestDetails.lastName}`,
+      checkIn: stayDetails.startDate,
+      checkOut: stayDetails.endDate
     };
 
-    console.log('Mock booking created:', mockBookingResponse);
+    console.log('Mock booking created:', mockBooking);
 
     res.json({
       success: true,
-      data: {
-        bookingId: mockBookingResponse.id,
-        bookingReference: mockBookingResponse.bookingReference,
-        status: 'enquiry',
-        guestName: `${guestDetails.firstName} ${guestDetails.lastName}`,
-        checkIn: stayDetails.startDate,
-        checkOut: stayDetails.endDate
-      }
+      data: mockBooking
     });
 
   } catch (error) {
-    console.error('Create booking error:', error);
+    console.error('Booking error:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to create booking',
@@ -52,15 +41,13 @@ const createBooking = async (req, res) => {
 const getBooking = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    console.log('Fetching booking:', bookingId);
     
-    // Mock response for now
     res.json({
       success: true,
       data: {
         id: bookingId,
-        status: 'ENQUIRY',
-        message: 'This is a mock booking response'
+        status: 'enquiry',
+        message: 'Mock booking data'
       }
     });
 
