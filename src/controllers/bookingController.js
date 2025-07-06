@@ -42,26 +42,26 @@ const createBooking = async (req, res) => {
       // The booking API might still work
     }
 
-    // Step 2: Create booking
-    const bookingData = {
-      bookingContactId: contact?.id || 1, // Fallback to existing contact ID
-      billingContactId: contact?.id || 1,
-      bookingFinanceAccountId: contact?.contactSalesAccount?.id || 1,
-      billingFinanceAccountId: contact?.contactSalesAccount?.id || 1,
-      billingFrequencyId: 1, // Monthly billing
-      bookingTypeId: 1, // Standard booking type
-      channelId: 1, // Direct booking channel
-      roomStays: [{
-        startDate: stayDetails.startDate,
-        endDate: stayDetails.endDate,
-        inventoryType: stayDetails.inventoryType || 'UNIT_TYPE',
-        inventoryTypeId: parseInt(stayDetails.inventoryTypeId),
-        rateId: parseInt(stayDetails.rateId),
-        numberOfAdults: parseInt(stayDetails.adults) || 1,
-        numberOfChildren: parseInt(stayDetails.children) || 0,
-        numberOfInfants: parseInt(stayDetails.infants) || 0
-      }]
-    };
+// Step 2: Create booking
+const bookingData = {
+  bookingContactId: contact?.id || 1, // Fallback to existing contact ID
+  billingContactId: contact?.id || 1,
+  bookingFinanceAccountId: contact?.contactSalesAccount?.id || 1,
+  billingFinanceAccountId: contact?.contactSalesAccount?.id || 1,
+  billingFrequencyId: 1, // Monthly billing
+  bookingTypeId: 1, // Standard booking type
+  channelId: 1, // Direct booking channel
+  roomStays: [{
+    startDate: stayDetails.startDate,
+    endDate: stayDetails.endDate,
+    inventoryType: stayDetails.inventoryType || 'UNIT_TYPE',
+    inventoryTypeId: parseInt(stayDetails.inventoryTypeId),
+    rateId: parseInt(stayDetails.rateId),
+    numberOfAdults: parseInt(stayDetails.adults) || 1,
+    numberOfChildren: parseInt(stayDetails.children) || 0,
+    numberOfInfants: parseInt(stayDetails.infants) || 0
+  }]
+};
 
     console.log('Creating booking with data:', JSON.stringify(bookingData, null, 2));
 
