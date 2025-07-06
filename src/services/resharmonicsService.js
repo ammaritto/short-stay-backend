@@ -28,7 +28,6 @@ class ResHarmonicsService {
     try {
       console.log('Requesting new access token using OAuth2 Client Credentials...');
       
-      // OAuth2 Client Credentials flow (matching your Postman setup)
       const authData = new URLSearchParams({
         grant_type: 'client_credentials',
         scope: this.scope
@@ -44,14 +43,13 @@ class ResHarmonicsService {
       const response = await axios.post(this.authURL, authData, {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          // Send client credentials as Basic Auth header (matching Postman)
           'Authorization': `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64')}`
         },
         timeout: 15000
       });
 
       this.accessToken = response.data.access_token;
-      this.tokenExpiry = Date.now() + (response.data.expires_in * 1000) - 60000; // 1 min buffer
+      this.tokenExpiry = Date.now() + (response.data.expires_in * 1000) - 60000;
       
       console.log('Access token obtained successfully');
       console.log('Token expires in:', response.data.expires_in, 'seconds');
@@ -106,7 +104,6 @@ class ResHarmonicsService {
     }
   }
 
-  // Search for availability
   async searchAvailability({ dateFrom, dateTo, guests = 1, inventoryType = 'UNIT_TYPE' }) {
     const params = new URLSearchParams({
       dateFrom,
@@ -118,77 +115,54 @@ class ResHarmonicsService {
     return await this.makeRequest(`/api/v3/availabilities?${params}`);
   }
 
-  // Get building details
   async getBuildings() {
     return await this.makeRequest('/api/v3/buildings');
   }
 
-  // Get areas (like in your Postman)
   async getAreas() {
     return await this.makeRequest('/api/v3/areas');
   }
 
-  // Get unit types
   async getUnitTypes() {
     return await this.makeRequest('/api/v3/unitTypes');
   }
 
-  // Create booking
   async createBooking(bookingData) {
     return await this.makeRequest('/api/v3/bookings', 'POST', bookingData);
   }
 
-  // Update booking status
   async updateBookingStatus(bookingId, statusData) {
     return await this.makeRequest(`/api/v3/bookings/${bookingId}/updateStatuses`, 'PUT', statusData);
   }
 
-  // Get booking details
   async getBooking(bookingId) {
     return await this.makeRequest(`/api/v3/bookings/${bookingId}`);
   }
 
-  // Create contact - CORRECTED VERSION based on official API docs
   async createContact(contactData) {
-    // Correct contact structure based on RES:Harmonics API documentation
     const contactPayload = {
-      // Required fields
       firstName: contactData.firstName,
       lastName: contactData.lastName,
       
-      // Primary email address (object structure)
       primaryContactEmailAddress: {
         email: contactData.email,
         primary: true
       },
       
-      // Primary telephone number (object structure) - only if phone provided
-      primaryContactTelephoneNumber: contactData.phone ? {
-        number: contactData.phone,
-        primary: true
-      } : null,
-      
-      // Contact type and source
       type: "GUEST",
       source: "ONLINE_BOOKING",
       status: "ACTIVE",
-      
-      // Lifecycle stage
       lifecycleStage: "LEAD",
-      
-      // Marketing preferences
       marketingOptOut: false,
-      
-      // Preferred contact method
       preferredContactMethod: "EMAIL"
     };
 
-    // Remove null values to avoid API issues
-    Object.keys(contactPayload).forEach(key => {
-      if (contactPayload[key] === null) {
-        delete contactPayload[key];
-      }
-    });
+    if (contactData.phone) {
+      contactPayload.primaryContactTelephoneNumber = {
+        number: contactData.phone,
+        primary: true
+      };
+    }
 
     console.log('Creating contact with correct API structure:', JSON.stringify(contactPayload, null, 2));
     
