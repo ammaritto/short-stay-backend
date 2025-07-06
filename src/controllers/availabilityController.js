@@ -31,6 +31,7 @@ const searchAvailability = async (req, res) => {
       inventoryTypeName: property.inventoryTypeName,
       rates: property.rateAvailabilities?.map(rate => ({
         rateId: rate.rateId,
+        rateCode: rate.rateCode,  // Add this line
         rateName: rate.shortName || rate.description,
         currency: rate.currencyCode,
         currencySymbol: rate.currencySymbol,
@@ -48,7 +49,6 @@ const searchAvailability = async (req, res) => {
       searchParams: { startDate, endDate, guests },
       total: transformedData.length
     });
-
   } catch (error) {
     console.error('Availability search error:', error);
     res.status(500).json({ 
@@ -77,7 +77,6 @@ const getBuildings = async (req, res) => {
       data: transformedBuildings,
       total: transformedBuildings.length
     });
-
   } catch (error) {
     console.error('Get buildings error:', error);
     res.status(500).json({ 
