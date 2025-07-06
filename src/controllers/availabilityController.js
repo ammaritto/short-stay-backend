@@ -1,5 +1,6 @@
 const { validationResult } = require('express-validator');
 const resHarmonicsService = require('../services/resharmonicsService');
+
 const searchAvailability = async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -10,15 +11,16 @@ const searchAvailability = async (req, res) => {
       });
     }
     const { startDate, endDate, guests } = req.query;
-
+    
     console.log('Searching availability:', { startDate, endDate, guests });
-
+    
     const availability = await resHarmonicsService.searchAvailability({
       dateFrom: startDate,
       dateTo: endDate,
       guests: parseInt(guests) || 1,
       inventoryType: 'UNIT_TYPE'
     });
+    
     // Transform the data for frontend consumption
     const transformedData = availability.content?.map(property => ({
       buildingId: property.buildingId,
@@ -39,6 +41,7 @@ const searchAvailability = async (req, res) => {
         bookingTerms: rate.bookingTerms
       })) || []
     })) || [];
+
     res.json({
       success: true,
       data: transformedData,
@@ -54,18 +57,20 @@ const searchAvailability = async (req, res) => {
     });
   }
 };
+
 const getBuildings = async (req, res) => {
   try {
     console.log('Fetching buildings...');
     const buildings = await resHarmonicsService.getBuildings();
-
+    
     const transformedBuildings = buildings.content?.map(building => ({
       id: building.id,
       name: building.buildingName,
-      address: ${building.addressLine1}${building.addressLine2 ? ', ' + building.addressLine2 : ''},
+      address: `${building.addressLine1}${building.addressLine2 ? ', ' + building.addressLine2 : ''}`,
       city: building.city,
       postCode: building.postCode
     })) || [];
+
     res.json({
       success: true,
       data: transformedBuildings,
@@ -80,6 +85,7 @@ const getBuildings = async (req, res) => {
     });
   }
 };
+
 module.exports = {
   searchAvailability,
   getBuildings
