@@ -1,3 +1,5 @@
+// src/controllers/bookingController.js - COMPLETE FIXED VERSION
+
 const resHarmonicsService = require('../services/resharmonicsService');
 
 // Helper function to generate payment reference
@@ -5,20 +7,47 @@ const generatePaymentReference = () => {
   return `PAY-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
 };
 
-// Helper function to validate card type
+// FIXED: Updated card type validation to match RES:Harmonics API
 const validateCardType = (cardNumber) => {
   const firstDigit = cardNumber.charAt(0);
   const firstTwoDigits = cardNumber.substring(0, 2);
   const firstFourDigits = cardNumber.substring(0, 4);
 
-  if (firstDigit === '4') return 'VISA_CREDIT';
-  if (['51', '52', '53', '54', '55'].includes(firstTwoDigits)) return 'MASTERCARD';
-  if (firstTwoDigits === '34' || firstTwoDigits === '37') return 'AMERICAN_EXPRESS';
-  if (firstFourDigits === '6011') return 'DINERS_CLUB';
+  // Based on RES:Harmonics API documentation
+  if (firstDigit === '4') {
+    // Check for Visa Electron first
+    if (['4026', '4508', '4844', '4913', '4917'].includes(firstFourDigits)) {
+      return 'VISA_ELECTRON';
+    }
+    return 'VISA_CREDIT'; // Default Visa
+  }
+  
+  if (['51', '52', '53', '54', '55'].includes(firstTwoDigits)) {
+    return 'MASTERCARD';
+  }
+  
+  if (firstTwoDigits === '34' || firstTwoDigits === '37') {
+    return 'AMERICAN_EXPRESS';
+  }
+  
+  if (firstTwoDigits === '30' || firstTwoDigits === '36' || firstTwoDigits === '38') {
+    return 'DINERS_CLUB';
+  }
+  
+  // Maestro ranges
+  if (['50', '56', '57', '58', '59', '60', '61', '62', '63', '64', '65', '66', '67', '68', '69'].includes(firstTwoDigits)) {
+    return 'MAESTRO';
+  }
+  
+  // JCB
+  if (firstTwoDigits === '35') {
+    return 'JCB';
+  }
   
   return 'VISA_CREDIT'; // Default fallback
 };
 
+// MAIN FUNCTION: Create booking with payment (FIXED)
 const createBookingWithPayment = async (req, res) => {
   let contact = null;
   let booking = null;
@@ -55,7 +84,7 @@ const createBookingWithPayment = async (req, res) => {
       });
     }
 
-    // Step 2: Create booking in ENQUIRY status
+    // Step 2: Create booking in ENQUIRY status - FIXED inventoryType structure
     const bookingPayload = {
       bookingContact: {
         id: contact.id
@@ -68,9 +97,8 @@ const createBookingWithPayment = async (req, res) => {
         rate: {
           id: unitDetails.rateId
         },
-        inventoryType: {
-          id: unitDetails.inventoryTypeId
-        },
+        // FIXED: Changed from object to just the ID
+        inventoryType: unitDetails.inventoryTypeId,
         internalNotes: `Web booking with payment for ${guestDetails.firstName} ${guestDetails.lastName}`
       }]
     };
@@ -89,17 +117,18 @@ const createBookingWithPayment = async (req, res) => {
       });
     }
 
-    // Step 3: Process payment through ResHarmonics
+    // Step 3: Process payment through ResHarmonics - FIXED payment structure
     const cardType = validateCardType(paymentDetails.cardNumber);
-    const lastFour = paymentDetails.cardNumber.slice(-4);
+    const lastFour = paymentDetails.cardNumber.replace(/\s/g, '').slice(-4);
     const paymentReference = generatePaymentReference();
 
+    // FIXED: Updated payment data structure to match RES:Harmonics API
     const paymentData = {
+      paymentReference: paymentReference,
+      type: 'CREDIT_CARD',                    // FIXED: was 'paymentType: CARD_PAYMENT'
       amount: parseFloat(paymentDetails.amount),
-      paymentType: 'CARD_PAYMENT',
-      cardType: cardType,
       lastFour: lastFour,
-      paymentReference: paymentReference
+      cardType: cardType
     };
 
     console.log('Processing payment:', paymentData);
@@ -174,7 +203,7 @@ const createBookingWithPayment = async (req, res) => {
   }
 };
 
-// Legacy booking creation without payment (keep for backward compatibility)
+// Legacy booking creation without payment (FIXED inventoryType)
 const createBooking = async (req, res) => {
   let contact = null;
 
@@ -200,7 +229,7 @@ const createBooking = async (req, res) => {
       });
     }
 
-    // Step 2: Create booking
+    // Step 2: Create booking - FIXED inventoryType structure
     const bookingPayload = {
       bookingContact: {
         id: contact.id
@@ -213,9 +242,8 @@ const createBooking = async (req, res) => {
         rate: {
           id: unitDetails.rateId
         },
-        inventoryType: {
-          id: unitDetails.inventoryTypeId
-        },
+        // FIXED: Changed from object to just the ID
+        inventoryType: unitDetails.inventoryTypeId,
         internalNotes: `Web booking for ${guestDetails.firstName} ${guestDetails.lastName}`
       }]
     };
@@ -267,52 +295,53 @@ const createBooking = async (req, res) => {
       debug: {
         contactCreated: !!contact,
         contactId: contact?.id,
-        errorDetails: error.message
+        bookingCreated: false,
+        bookingId: null
       }
     });
   }
 };
 
+// Get booking details
 const getBooking = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    console.log('Fetching booking:', bookingId);
-    
-    const booking = await resHarmonicsService.getBooking(bookingId);
+    console.log(`Fetching booking details for ID: ${bookingId}`);
 
+    const booking = await resHarmonicsService.getBooking(bookingId);
+    
     res.json({
       success: true,
       data: booking
     });
-
   } catch (error) {
-    console.error('Get booking error:', error);
-    res.status(500).json({ 
-      success: false, 
+    console.error('Get booking error:', error.message);
+    res.status(400).json({
+      success: false,
       error: 'Failed to fetch booking',
-      message: error.message 
+      message: error.message
     });
   }
 };
 
+// Get booking payments
 const getBookingPayments = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    console.log('Fetching payments for booking:', bookingId);
-    
-    const payments = await resHarmonicsService.getBookingPayments(bookingId);
+    console.log(`Fetching payments for booking ID: ${bookingId}`);
 
+    const payments = await resHarmonicsService.getBookingPayments(bookingId);
+    
     res.json({
       success: true,
       data: payments
     });
-
   } catch (error) {
-    console.error('Get booking payments error:', error);
-    res.status(500).json({ 
-      success: false, 
+    console.error('Get booking payments error:', error.message);
+    res.status(400).json({
+      success: false,
       error: 'Failed to fetch booking payments',
-      message: error.message 
+      message: error.message
     });
   }
 };
