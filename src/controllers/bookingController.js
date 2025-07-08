@@ -1,106 +1,231 @@
-const { validationResult } = require('express-validator');
 const resHarmonicsService = require('../services/resharmonicsService');
 
-const createBooking = async (req, res) => {
+// Helper function to generate payment reference
+const generatePaymentReference = () => {
+  return `PAY-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+};
+
+// Helper function to validate card type
+const validateCardType = (cardNumber) => {
+  const firstDigit = cardNumber.charAt(0);
+  const firstTwoDigits = cardNumber.substring(0, 2);
+  const firstFourDigits = cardNumber.substring(0, 4);
+
+  if (firstDigit === '4') return 'VISA_CREDIT';
+  if (['51', '52', '53', '54', '55'].includes(firstTwoDigits)) return 'MASTERCARD';
+  if (firstTwoDigits === '34' || firstTwoDigits === '37') return 'AMERICAN_EXPRESS';
+  if (firstFourDigits === '6011') return 'DINERS_CLUB';
+  
+  return 'VISA_CREDIT'; // Default fallback
+};
+
+const createBookingWithPayment = async (req, res) => {
+  let contact = null;
+  let booking = null;
+
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ 
+    const { guestDetails, stayDetails, unitDetails, paymentDetails } = req.body;
+
+    console.log('Creating booking with payment:', {
+      guestDetails,
+      stayDetails,
+      unitDetails,
+      paymentAmount: paymentDetails?.amount
+    });
+
+    // Validate required payment details
+    if (!paymentDetails || !paymentDetails.amount || !paymentDetails.cardNumber) {
+      return res.status(400).json({
         success: false,
-        errors: errors.array() 
+        error: 'Payment details are required',
+        message: 'Card number and amount must be provided'
       });
     }
 
-    const { guestDetails, stayDetails } = req.body;
-
-    console.log('Creating booking for:', guestDetails.email);
-    console.log('Stay details:', JSON.stringify(stayDetails, null, 2));
-
-    // Step 1: Create contact (this works perfectly)
-    let contact = null;
+    // Step 1: Create or find contact
     try {
-      const contactData = {
-        firstName: guestDetails.firstName,
-        lastName: guestDetails.lastName,
-        email: guestDetails.email,
-        phone: guestDetails.phone || null
-      };
-
-      console.log('Creating contact...');
-      contact = await resHarmonicsService.createContact(contactData);
-      console.log('Contact created:', contact.id);
-      
-      // Verify contact has email and phone
-      if (!contact.contactEmailAddresses || contact.contactEmailAddresses.length === 0) {
-        console.warn('WARNING: Contact created but email addresses missing');
-      }
-      if (!contact.contactTelephoneNumbers || contact.contactTelephoneNumbers.length === 0) {
-        console.warn('WARNING: Contact created but telephone numbers missing');
-      }
-      
+      contact = await resHarmonicsService.createContact(guestDetails);
+      console.log('Contact created/found:', contact.id);
     } catch (contactError) {
       console.error('Contact creation failed:', contactError.message);
       return res.status(400).json({
         success: false,
-        error: 'Failed to create contact',
+        error: 'Failed to create guest contact',
         message: contactError.message
       });
     }
 
-    // Step 2: Create booking with EXACT RES:Harmonics API structure
+    // Step 2: Create booking in ENQUIRY status
     const bookingPayload = {
-      // Required contact IDs
-      bookingContactId: contact.id,
-      billingContactId: contact.id,
-      
-      // Required finance account IDs (using contact's account or defaults)
-      bookingFinanceAccountId: contact.contactSalesAccount?.id || 1,
-      billingFinanceAccountId: contact.contactSalesAccount?.id || 1,
-      
-      // Required IDs with defaults
-      billingFrequencyId: 1, // Default billing frequency
-      bookingTypeId: 1, // Default booking type
-      channelId: 1, // Default channel (direct booking)
-      
-      // Optional fields
-      customerReference: `WEB-${Date.now()}`,
-      notes: `Booking created via web portal for ${guestDetails.firstName} ${guestDetails.lastName}`,
-      reserveForMinutes: 60, // Hold availability for 1 hour
-      
-      // Room stays array - EXACTLY as per API documentation
+      bookingContact: {
+        id: contact.id
+      },
       roomStays: [{
-        // Required dates
         startDate: stayDetails.startDate,
         endDate: stayDetails.endDate,
-        
-        // Required inventory information
-        inventoryType: "UNIT_TYPE", // Using unit type booking
-        inventoryTypeId: parseInt(stayDetails.inventoryTypeId),
-        
-        // Required rate
-        rateId: parseInt(stayDetails.rateId),
-        
-        // Required guest counts
-        numberOfAdults: parseInt(stayDetails.adults) || 1,
-        numberOfChildren: parseInt(stayDetails.children) || 0,
-        numberOfInfants: parseInt(stayDetails.infants) || 0,
-        
-        // Optional guest assignment
-        guestIds: [contact.id],
-        
-        // Optional notes
-        externalNotes: `Web booking for ${guestDetails.firstName} ${guestDetails.lastName}`
+        guests: parseInt(stayDetails.guests),
+        status: 'ENQUIRY',
+        rate: {
+          id: unitDetails.rateId
+        },
+        inventoryType: {
+          id: unitDetails.inventoryTypeId
+        },
+        internalNotes: `Web booking with payment for ${guestDetails.firstName} ${guestDetails.lastName}`
       }]
     };
 
-    console.log('Correct booking payload:', JSON.stringify(bookingPayload, null, 2));
+    console.log('Creating booking with payload:', JSON.stringify(bookingPayload, null, 2));
 
-    // Create the booking
+    try {
+      booking = await resHarmonicsService.createBooking(bookingPayload);
+      console.log('Booking created successfully:', booking.id);
+    } catch (bookingError) {
+      console.error('Booking creation failed:', bookingError.message);
+      return res.status(400).json({
+        success: false,
+        error: 'Failed to create booking',
+        message: bookingError.message
+      });
+    }
+
+    // Step 3: Process payment through ResHarmonics
+    const cardType = validateCardType(paymentDetails.cardNumber);
+    const lastFour = paymentDetails.cardNumber.slice(-4);
+    const paymentReference = generatePaymentReference();
+
+    const paymentData = {
+      amount: parseFloat(paymentDetails.amount),
+      paymentType: 'CARD_PAYMENT',
+      cardType: cardType,
+      lastFour: lastFour,
+      paymentReference: paymentReference
+    };
+
+    console.log('Processing payment:', paymentData);
+
+    try {
+      const paymentResult = await resHarmonicsService.createBookingPayment(booking.id, paymentData);
+      console.log('Payment processed successfully:', paymentResult);
+    } catch (paymentError) {
+      console.error('Payment processing failed:', paymentError.message);
+      
+      // Payment failed - we should ideally cancel the booking here
+      // For now, we'll return an error
+      return res.status(400).json({
+        success: false,
+        error: 'Payment processing failed',
+        message: paymentError.message,
+        bookingId: booking.id // Include booking ID for potential cleanup
+      });
+    }
+
+    // Step 4: Update booking status to CONFIRMED
+    try {
+      if (booking.roomStays && booking.roomStays.length > 0) {
+        const roomStayId = booking.roomStays[0].id;
+        await resHarmonicsService.updateBookingStatus(booking.id, {
+          statusUpdates: [{
+            roomStayId: roomStayId,
+            status: 'CONFIRMED'
+          }]
+        });
+        console.log('Booking status updated to CONFIRMED');
+      }
+    } catch (statusError) {
+      console.error('Failed to update booking status:', statusError.message);
+      // Payment succeeded but status update failed - log but continue
+      console.log('Payment was successful, but status update failed. Booking may need manual confirmation.');
+    }
+
+    // Step 5: Return success response
+    res.json({
+      success: true,
+      data: {
+        bookingId: booking.id,
+        bookingReference: booking.bookingReference,
+        status: 'confirmed',
+        guestName: `${guestDetails.firstName} ${guestDetails.lastName}`,
+        checkIn: stayDetails.startDate,
+        checkOut: stayDetails.endDate,
+        contactId: contact.id,
+        paymentReference: paymentReference,
+        paymentAmount: paymentDetails.amount
+      }
+    });
+
+  } catch (error) {
+    console.error('Create booking with payment error:', {
+      message: error.message,
+      requestBody: req.body
+    });
+    
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to create booking with payment',
+      message: error.message,
+      debug: {
+        contactCreated: !!contact,
+        contactId: contact?.id,
+        bookingCreated: !!booking,
+        bookingId: booking?.id
+      }
+    });
+  }
+};
+
+// Legacy booking creation without payment (keep for backward compatibility)
+const createBooking = async (req, res) => {
+  let contact = null;
+
+  try {
+    const { guestDetails, stayDetails, unitDetails } = req.body;
+
+    console.log('Creating booking (legacy):', {
+      guestDetails,
+      stayDetails,
+      unitDetails
+    });
+
+    // Step 1: Create contact
+    try {
+      contact = await resHarmonicsService.createContact(guestDetails);
+      console.log('Contact created:', contact.id);
+    } catch (contactError) {
+      console.error('Contact creation failed:', contactError.message);
+      return res.status(400).json({
+        success: false,
+        error: 'Failed to create guest contact',
+        message: contactError.message
+      });
+    }
+
+    // Step 2: Create booking
+    const bookingPayload = {
+      bookingContact: {
+        id: contact.id
+      },
+      roomStays: [{
+        startDate: stayDetails.startDate,
+        endDate: stayDetails.endDate,
+        guests: parseInt(stayDetails.guests),
+        status: 'ENQUIRY',
+        rate: {
+          id: unitDetails.rateId
+        },
+        inventoryType: {
+          id: unitDetails.inventoryTypeId
+        },
+        internalNotes: `Web booking for ${guestDetails.firstName} ${guestDetails.lastName}`
+      }]
+    };
+
+    console.log('Creating booking with payload:', JSON.stringify(bookingPayload, null, 2));
+
     const booking = await resHarmonicsService.createBooking(bookingPayload);
-
     console.log('Booking created successfully:', booking);
 
-    // Step 3: Update status to ENQUIRY (as requested)
+    // Step 3: Update status to ENQUIRY
     try {
       if (booking.roomStays && booking.roomStays.length > 0) {
         const roomStayId = booking.roomStays[0].id;
@@ -114,10 +239,8 @@ const createBooking = async (req, res) => {
       }
     } catch (statusError) {
       console.error('Failed to update booking status:', statusError.message);
-      // Continue even if status update fails - booking was created successfully
     }
 
-    // Return success response
     res.json({
       success: true,
       data: {
@@ -172,7 +295,31 @@ const getBooking = async (req, res) => {
   }
 };
 
+const getBookingPayments = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    console.log('Fetching payments for booking:', bookingId);
+    
+    const payments = await resHarmonicsService.getBookingPayments(bookingId);
+
+    res.json({
+      success: true,
+      data: payments
+    });
+
+  } catch (error) {
+    console.error('Get booking payments error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to fetch booking payments',
+      message: error.message 
+    });
+  }
+};
+
 module.exports = {
   createBooking,
-  getBooking
+  createBookingWithPayment,
+  getBooking,
+  getBookingPayments
 };
