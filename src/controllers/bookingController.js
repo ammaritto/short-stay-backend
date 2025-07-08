@@ -1,5 +1,5 @@
-// FINAL CORRECTED VERSION - Based on Official RES:Harmonics API Documentation
-// src/controllers/bookingController.js
+// Updated src/controllers/bookingController.js
+// NEW FLOW: Create booking -> Set PENDING -> Post invoice -> Process payment -> Set CONFIRMED
 
 const resHarmonicsService = require('../services/resharmonicsService');
 
@@ -45,15 +45,16 @@ const validateCardType = (cardNumber) => {
   return 'VISA_CREDIT';
 };
 
-// MAIN FUNCTION: Create booking with payment (CORRECTED to match official API)
+// UPDATED MAIN FUNCTION: Create booking with payment (NEW FLOW)
 const createBookingWithPayment = async (req, res) => {
   let contact = null;
   let booking = null;
+  let invoicePosted = false;
 
   try {
     const { guestDetails, stayDetails, unitDetails, paymentDetails } = req.body;
 
-    console.log('Creating booking with payment:', {
+    console.log('Creating booking with payment (NEW FLOW):', {
       guestDetails,
       stayDetails,
       unitDetails,
@@ -82,21 +83,18 @@ const createBookingWithPayment = async (req, res) => {
       });
     }
 
-    // Step 2: Create booking using CORRECT API structure
+    // Step 2: Create booking (will be in ENQUIRY status by default)
     const bookingPayload = {
-      // Required fields according to API documentation
       bookingContactId: contact.id,
       billingContactId: contact.id,
-      bookingFinanceAccountId: contact.id, // Assuming contact ID can be used
+      bookingFinanceAccountId: contact.id,
       billingFinanceAccountId: contact.id,
-      billingFrequencyId: 1, // You may need to get this from your system
-      bookingTypeId: 1, // You may need to get this from your system
-      channelId: 1, // You may need to get this from your system
+      billingFrequencyId: 1,
+      bookingTypeId: 1,
+      channelId: 1,
       
-      // Optional fields
       notes: `Web booking with payment for ${guestDetails.firstName} ${guestDetails.lastName}`,
       
-      // Room stays array with CORRECT structure
       roomStays: [{
         startDate: stayDetails.startDate,
         endDate: stayDetails.endDate,
@@ -104,7 +102,6 @@ const createBookingWithPayment = async (req, res) => {
         numberOfChildren: 0,
         numberOfInfants: 0,
         rateId: unitDetails.rateId,
-        // CORRECT: Use string enum and separate ID field
         inventoryType: 'UNIT_TYPE',
         inventoryTypeId: unitDetails.inventoryTypeId
       }]
@@ -114,7 +111,7 @@ const createBookingWithPayment = async (req, res) => {
 
     try {
       booking = await resHarmonicsService.createBooking(bookingPayload);
-      console.log('Booking created successfully:', booking.id);
+      console.log('Booking created successfully (ENQUIRY status):', booking.id);
     } catch (bookingError) {
       console.error('Booking creation failed:', bookingError.message);
       return res.status(400).json({
@@ -124,15 +121,63 @@ const createBookingWithPayment = async (req, res) => {
       });
     }
 
-    // Step 3: Process payment using CORRECT payment structure
+    // Step 3: Update booking status to PENDING
+    try {
+      if (booking.roomStays && booking.roomStays.length > 0) {
+        const roomStayId = booking.roomStays[0].id;
+        await resHarmonicsService.updateBookingStatus(booking.id, {
+          statusUpdates: [{
+            roomStayId: roomStayId,
+            status: 'PENDING'
+          }]
+        });
+        console.log('Booking status updated to PENDING');
+      }
+    } catch (statusError) {
+      console.error('Failed to update booking status to PENDING:', statusError.message);
+      return res.status(400).json({
+        success: false,
+        error: 'Failed to update booking status to PENDING',
+        message: statusError.message,
+        bookingId: booking.id
+      });
+    }
+
+    // Step 4: Get booking invoices and post them
+    try {
+      const invoices = await resHarmonicsService.getBookingInvoices(booking.id);
+      console.log('Retrieved booking invoices:', invoices);
+      
+      if (invoices && invoices.length > 0) {
+        // Post each invoice that's not already posted
+        for (const invoice of invoices) {
+          if (invoice.status !== 'POSTED') {
+            await resHarmonicsService.postInvoice(invoice.id);
+            console.log(`Invoice ${invoice.id} posted successfully`);
+          }
+        }
+        invoicePosted = true;
+      } else {
+        console.log('No invoices found for booking, will proceed with payment');
+      }
+    } catch (invoiceError) {
+      console.error('Failed to post invoice:', invoiceError.message);
+      return res.status(400).json({
+        success: false,
+        error: 'Failed to post invoice',
+        message: invoiceError.message,
+        bookingId: booking.id
+      });
+    }
+
+    // Step 5: Process payment
     const cardType = validateCardType(paymentDetails.cardNumber);
     const lastFour = paymentDetails.cardNumber.replace(/\s/g, '').slice(-4);
     const paymentReference = generatePaymentReference();
 
-    // CORRECT payment structure according to API documentation
     const paymentData = {
       paymentReference: paymentReference,
-      paymentType: 'CARD_PAYMENT', // CORRECT: API expects 'paymentType'
+      paymentType: 'CARD_PAYMENT',
       amount: parseFloat(paymentDetails.amount),
       lastFour: lastFour,
       cardType: cardType
@@ -149,11 +194,12 @@ const createBookingWithPayment = async (req, res) => {
         success: false,
         error: 'Payment processing failed',
         message: paymentError.message,
-        bookingId: booking.id
+        bookingId: booking.id,
+        invoicePosted: invoicePosted
       });
     }
 
-    // Step 4: Update booking status to CONFIRMED
+    // Step 6: Update booking status to CONFIRMED after successful payment
     try {
       if (booking.roomStays && booking.roomStays.length > 0) {
         const roomStayId = booking.roomStays[0].id;
@@ -166,11 +212,11 @@ const createBookingWithPayment = async (req, res) => {
         console.log('Booking status updated to CONFIRMED');
       }
     } catch (statusError) {
-      console.error('Failed to update booking status:', statusError.message);
-      console.log('Payment was successful, but status update failed. Booking may need manual confirmation.');
+      console.error('Failed to update booking status to CONFIRMED:', statusError.message);
+      console.log('Payment was successful, but final status update failed. Booking may need manual confirmation.');
     }
 
-    // Step 5: Return success response
+    // Step 7: Return success response
     res.json({
       success: true,
       data: {
@@ -182,7 +228,9 @@ const createBookingWithPayment = async (req, res) => {
         checkOut: stayDetails.endDate,
         contactId: contact.id,
         paymentReference: paymentReference,
-        paymentAmount: paymentDetails.amount
+        paymentAmount: paymentDetails.amount,
+        invoicePosted: invoicePosted,
+        flow: 'NEW: ENQUIRY → PENDING → INVOICE_POSTED → PAYMENT → CONFIRMED'
       }
     });
 
@@ -200,29 +248,30 @@ const createBookingWithPayment = async (req, res) => {
         contactCreated: !!contact,
         contactId: contact?.id,
         bookingCreated: !!booking,
-        bookingId: booking?.id
+        bookingId: booking?.id,
+        invoicePosted: invoicePosted
       }
     });
   }
 };
 
-// Legacy booking creation (CORRECTED to match official API)
+// Legacy create booking function (unchanged)
 const createBooking = async (req, res) => {
   let contact = null;
 
   try {
     const { guestDetails, stayDetails, unitDetails } = req.body;
 
-    console.log('Creating booking (legacy):', {
+    console.log('Creating legacy booking (enquiry only):', {
       guestDetails,
       stayDetails,
       unitDetails
     });
 
-    // Step 1: Create contact
+    // Step 1: Create or find contact
     try {
       contact = await resHarmonicsService.createContact(guestDetails);
-      console.log('Contact created:', contact.id);
+      console.log('Contact created/found:', contact.id);
     } catch (contactError) {
       console.error('Contact creation failed:', contactError.message);
       return res.status(400).json({
@@ -232,9 +281,8 @@ const createBooking = async (req, res) => {
       });
     }
 
-    // Step 2: Create booking using CORRECT API structure
+    // Step 2: Create booking (ENQUIRY status)
     const bookingPayload = {
-      // Required fields
       bookingContactId: contact.id,
       billingContactId: contact.id,
       bookingFinanceAccountId: contact.id,
@@ -243,7 +291,7 @@ const createBooking = async (req, res) => {
       bookingTypeId: 1,
       channelId: 1,
       
-      notes: `Web booking for ${guestDetails.firstName} ${guestDetails.lastName}`,
+      notes: `Legacy web booking for ${guestDetails.firstName} ${guestDetails.lastName}`,
       
       roomStays: [{
         startDate: stayDetails.startDate,
@@ -257,26 +305,10 @@ const createBooking = async (req, res) => {
       }]
     };
 
-    console.log('Creating booking with payload:', JSON.stringify(bookingPayload, null, 2));
+    console.log('Creating legacy booking with payload:', JSON.stringify(bookingPayload, null, 2));
 
     const booking = await resHarmonicsService.createBooking(bookingPayload);
-    console.log('Booking created successfully:', booking);
-
-    // Step 3: Update status to CONFIRMED (or keep as ENQUIRY)
-    try {
-      if (booking.roomStays && booking.roomStays.length > 0) {
-        const roomStayId = booking.roomStays[0].id;
-        await resHarmonicsService.updateBookingStatus(booking.id, {
-          statusUpdates: [{
-            roomStayId: roomStayId,
-            status: 'ENQUIRY' // Keep as enquiry for legacy bookings
-          }]
-        });
-        console.log('Booking status updated to ENQUIRY');
-      }
-    } catch (statusError) {
-      console.error('Failed to update booking status:', statusError.message);
-    }
+    console.log('Legacy booking created successfully:', booking.id);
 
     res.json({
       success: true,
@@ -292,20 +324,18 @@ const createBooking = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Create booking error details:', {
+    console.error('Create legacy booking error:', {
       message: error.message,
       requestBody: req.body
     });
     
-    res.status(400).json({ 
+    res.status(500).json({ 
       success: false, 
       error: 'Failed to create booking',
       message: error.message,
       debug: {
         contactCreated: !!contact,
-        contactId: contact?.id,
-        bookingCreated: false,
-        bookingId: null
+        contactId: contact?.id
       }
     });
   }
@@ -315,8 +345,8 @@ const createBooking = async (req, res) => {
 const getBooking = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    console.log(`Fetching booking details for ID: ${bookingId}`);
-
+    console.log('Fetching booking details for ID:', bookingId);
+    
     const booking = await resHarmonicsService.getBooking(bookingId);
     
     res.json({
@@ -325,9 +355,9 @@ const getBooking = async (req, res) => {
     });
   } catch (error) {
     console.error('Get booking error:', error.message);
-    res.status(400).json({
-      success: false,
-      error: 'Failed to fetch booking',
+    res.status(404).json({ 
+      success: false, 
+      error: 'Booking not found',
       message: error.message
     });
   }
@@ -337,8 +367,8 @@ const getBooking = async (req, res) => {
 const getBookingPayments = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    console.log(`Fetching payments for booking ID: ${bookingId}`);
-
+    console.log('Fetching payments for booking ID:', bookingId);
+    
     const payments = await resHarmonicsService.getBookingPayments(bookingId);
     
     res.json({
@@ -347,9 +377,9 @@ const getBookingPayments = async (req, res) => {
     });
   } catch (error) {
     console.error('Get booking payments error:', error.message);
-    res.status(400).json({
-      success: false,
-      error: 'Failed to fetch booking payments',
+    res.status(404).json({ 
+      success: false, 
+      error: 'Payments not found',
       message: error.message
     });
   }
