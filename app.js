@@ -39,10 +39,11 @@ app.get('/api/health', (req, res) => {
     status: 'OK',
     environment: process.env.NODE_ENV,
     hasCredentials: {
-      username: !!process.env.RH_USERNAME,
-      password: !!process.env.RH_PASSWORD,
+      clientId: !!process.env.RH_CLIENT_ID,
+      clientSecret: !!process.env.RH_CLIENT_SECRET,
       authUrl: !!process.env.RH_AUTH_URL,
-      baseUrl: !!process.env.RH_BASE_URL
+      baseUrl: !!process.env.RH_BASE_URL,
+      scope: process.env.RH_SCOPE || 'api/read api/write'
     },
     features: {
       availability: true,
