@@ -129,7 +129,45 @@ class ResHarmonicsService {
   }
 
   async getBooking(bookingId) {
-    return await this.makeRequest(`/api/v3/bookings/${bookingId}`);
+    const booking = await this.makeRequest(`/api/v3/bookings/${bookingId}`);
+    
+    // If no room stays in main response, fetch them separately
+    if (!booking.roomStays || booking.roomStays.length === 0) {
+      console.log('No room stays in main booking response, fetching separately...');
+      try {
+        const roomStays = await this.getBookingRoomStays(bookingId);
+        booking.roomStays = roomStays;
+        console.log(`Added ${roomStays.length} room stays to booking object`);
+      } catch (error) {
+        console.warn('Failed to fetch room stays separately:', error.message);
+      }
+    }
+    
+    return booking;
+  }
+
+  // NEW: Get room stays for a booking
+  async getBookingRoomStays(bookingId) {
+    console.log(`Fetching room stays for booking ${bookingId}`);
+    try {
+      const response = await this.makeRequest(`/api/v3/bookings/${bookingId}/roomStays`);
+      
+      // Handle different response structures
+      let roomStays = [];
+      if (response && response.content && Array.isArray(response.content)) {
+        roomStays = response.content;
+      } else if (response && Array.isArray(response)) {
+        roomStays = response;
+      } else if (response && response._embedded && response._embedded.roomStays) {
+        roomStays = response._embedded.roomStays;
+      }
+      
+      console.log(`Found ${roomStays.length} room stays for booking ${bookingId}`);
+      return roomStays;
+    } catch (error) {
+      console.error('Failed to get booking room stays:', error.message);
+      throw error;
+    }
   }
 
   // Payment methods
