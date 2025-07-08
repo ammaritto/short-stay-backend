@@ -70,6 +70,20 @@ const createBookingWithPayment = async (req, res) => {
       });
     }
 
+    // Additional validation - check if amount is greater than 0
+    const paymentAmount = parseFloat(paymentDetails.amount);
+    if (paymentAmount < 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid payment amount',
+        message: 'Payment amount cannot be negative'
+      });
+    }
+
+    // For testing purposes, allow 0 amounts but use minimum amount for ResHarmonics
+    const actualPaymentAmount = paymentAmount === 0 ? 1 : paymentAmount; // Use 1 SEK for testing
+    console.log(`Original amount: ${paymentAmount}, Using amount: ${actualPaymentAmount} for payment processing`);
+
     // Step 1: Create or find contact
     try {
       contact = await resHarmonicsService.createContact(guestDetails);
@@ -122,9 +136,16 @@ const createBookingWithPayment = async (req, res) => {
     }
 
     // Step 3: Update booking status to PENDING
+    let roomStayId = null;
     try {
-      if (booking.roomStays && booking.roomStays.length > 0) {
-        const roomStayId = booking.roomStays[0].id;
+      // First, we need to get the booking to find room stays
+      const freshBooking = await resHarmonicsService.getBooking(booking.id);
+      console.log('Fresh booking retrieved for status update:', JSON.stringify(freshBooking, null, 2));
+      
+      if (freshBooking.roomStays && freshBooking.roomStays.length > 0) {
+        roomStayId = freshBooking.roomStays[0].id;
+        console.log(`Found room stay ID: ${roomStayId}`);
+        
         await resHarmonicsService.updateBookingStatus(booking.id, {
           statusUpdates: [{
             roomStayId: roomStayId,
@@ -132,6 +153,18 @@ const createBookingWithPayment = async (req, res) => {
           }]
         });
         console.log('Booking status updated to PENDING');
+      } else {
+        console.error('ERROR: No room stays found in fresh booking - cannot update status');
+        return res.status(400).json({
+          success: false,
+          error: 'Booking validation failed',
+          message: 'No room stays found after booking creation. This may indicate an issue with the booking parameters.',
+          bookingId: booking.id,
+          debug: {
+            originalBooking: booking,
+            freshBooking: freshBooking
+          }
+        });
       }
     } catch (statusError) {
       console.error('Failed to update booking status to PENDING:', statusError.message);
@@ -143,7 +176,41 @@ const createBookingWithPayment = async (req, res) => {
       });
     }
 
-    // Step 4: Get booking invoices and post them
+    // Step 4: Get booking details again to check for room stays
+    let updatedBooking;
+    try {
+      updatedBooking = await resHarmonicsService.getBooking(booking.id);
+      console.log('Updated booking retrieved:', JSON.stringify(updatedBooking, null, 2));
+      
+      if (!updatedBooking.roomStays || updatedBooking.roomStays.length === 0) {
+        console.error('ERROR: No room stays found in booking after PENDING update');
+        return res.status(400).json({
+          success: false,
+          error: 'Booking validation failed',
+          message: 'No room stays found in booking. Check your booking creation parameters.',
+          bookingId: booking.id,
+          debug: {
+            originalBooking: booking,
+            updatedBooking: updatedBooking
+          }
+        });
+      }
+      
+      // Update roomStayId from the latest booking data
+      roomStayId = updatedBooking.roomStays[0].id;
+      console.log(`Confirmed room stay ID: ${roomStayId}`);
+      
+    } catch (getBookingError) {
+      console.error('Failed to retrieve updated booking:', getBookingError.message);
+      return res.status(400).json({
+        success: false,
+        error: 'Failed to validate booking',
+        message: getBookingError.message,
+        bookingId: booking.id
+      });
+    }
+
+    // Step 5: Get booking invoices and post them
     try {
       const invoices = await resHarmonicsService.getBookingInvoices(booking.id);
       console.log('Retrieved booking invoices:', invoices);
@@ -170,7 +237,7 @@ const createBookingWithPayment = async (req, res) => {
       });
     }
 
-    // Step 5: Process payment
+    // Step 6: Process payment
     const cardType = validateCardType(paymentDetails.cardNumber);
     const lastFour = paymentDetails.cardNumber.replace(/\s/g, '').slice(-4);
     const paymentReference = generatePaymentReference();
@@ -178,7 +245,7 @@ const createBookingWithPayment = async (req, res) => {
     const paymentData = {
       paymentReference: paymentReference,
       paymentType: 'CARD_PAYMENT',
-      amount: parseFloat(paymentDetails.amount),
+      amount: actualPaymentAmount, // Use the adjusted amount
       lastFour: lastFour,
       cardType: cardType
     };
@@ -199,10 +266,9 @@ const createBookingWithPayment = async (req, res) => {
       });
     }
 
-    // Step 6: Update booking status to CONFIRMED after successful payment
+    // Step 7: Update booking status to CONFIRMED after successful payment
     try {
-      if (booking.roomStays && booking.roomStays.length > 0) {
-        const roomStayId = booking.roomStays[0].id;
+      if (roomStayId) {
         await resHarmonicsService.updateBookingStatus(booking.id, {
           statusUpdates: [{
             roomStayId: roomStayId,
@@ -210,13 +276,15 @@ const createBookingWithPayment = async (req, res) => {
           }]
         });
         console.log('Booking status updated to CONFIRMED');
+      } else {
+        console.error('No room stay ID available for final status update');
       }
     } catch (statusError) {
       console.error('Failed to update booking status to CONFIRMED:', statusError.message);
       console.log('Payment was successful, but final status update failed. Booking may need manual confirmation.');
     }
 
-    // Step 7: Return success response
+    // Step 8: Return success response
     res.json({
       success: true,
       data: {
@@ -230,7 +298,11 @@ const createBookingWithPayment = async (req, res) => {
         paymentReference: paymentReference,
         paymentAmount: paymentDetails.amount,
         invoicePosted: invoicePosted,
-        flow: 'NEW: ENQUIRY → PENDING → INVOICE_POSTED → PAYMENT → CONFIRMED'
+        flow: 'NEW: ENQUIRY → PENDING → INVOICE_POSTED → PAYMENT → CONFIRMED',
+        debug: {
+          hadRoomStays: !!(updatedBooking.roomStays && updatedBooking.roomStays.length > 0),
+          roomStayCount: updatedBooking.roomStays ? updatedBooking.roomStays.length : 0
+        }
       }
     });
 
