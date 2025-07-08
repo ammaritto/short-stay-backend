@@ -123,12 +123,13 @@ class ResHarmonicsService {
           rateCode
         });
 
-        const endpoint = `/api/v3/rates/availability?${params.toString()}`;
+        // FIXED: Use correct endpoint /api/v3/availabilities instead of /api/v3/rates/availability
+        const endpoint = `/api/v3/availabilities?${params.toString()}`;
         const data = await this.makeRequest(endpoint);
         
-        if (data._embedded?.ratesAvailabilityItems) {
-          console.log(`Found ${data._embedded.ratesAvailabilityItems.length} items for ${rateCode}`);
-          allResults.push(...data._embedded.ratesAvailabilityItems);
+        if (data.content && data.content.length > 0) {
+          console.log(`Found ${data.content.length} items for ${rateCode}`);
+          allResults.push(...data.content);
         } else {
           console.log(`No availability found for rate code: ${rateCode}`);
         }
@@ -139,9 +140,35 @@ class ResHarmonicsService {
       }
     }
 
-    const uniqueResults = Array.from(
-      new Map(allResults.map(item => [`${item.inventoryType.id}-${item.rate.id}`, item])).values()
-    );
+    // Remove duplicates based on building + inventory type + rate combination
+    const uniqueResults = [];
+    const seen = new Set();
+    
+    for (const property of allResults) {
+      for (const rate of property.rateAvailabilities || []) {
+        const key = `${property.buildingId}-${property.inventoryTypeId}-${rate.rateId}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          
+          // Find if we already have this property in uniqueResults
+          let existingProperty = uniqueResults.find(p => 
+            p.buildingId === property.buildingId && 
+            p.inventoryTypeId === property.inventoryTypeId
+          );
+          
+          if (existingProperty) {
+            // Add the rate to existing property
+            existingProperty.rateAvailabilities.push(rate);
+          } else {
+            // Create new property with this rate
+            uniqueResults.push({
+              ...property,
+              rateAvailabilities: [rate]
+            });
+          }
+        }
+      }
+    }
 
     console.log(`Total unique properties with WEB rates: ${uniqueResults.length}`);
     
