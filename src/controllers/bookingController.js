@@ -154,17 +154,45 @@ const createBookingWithPayment = async (req, res) => {
         });
         console.log('Booking status updated to PENDING');
       } else {
-        console.error('ERROR: No room stays found in fresh booking - cannot update status');
-        return res.status(400).json({
-          success: false,
-          error: 'Booking validation failed',
-          message: 'No room stays found after booking creation. This may indicate an issue with the booking parameters.',
-          bookingId: booking.id,
-          debug: {
-            originalBooking: booking,
-            freshBooking: freshBooking
+        console.log('No room stays in booking response, trying direct room stays endpoint...');
+        
+        // Try to get room stays directly
+        try {
+          const roomStays = await resHarmonicsService.getBookingRoomStays(booking.id);
+          if (roomStays && roomStays.length > 0) {
+            roomStayId = roomStays[0].id;
+            console.log(`Found room stay ID via direct call: ${roomStayId}`);
+            
+            await resHarmonicsService.updateBookingStatus(booking.id, {
+              statusUpdates: [{
+                roomStayId: roomStayId,
+                status: 'PENDING'
+              }]
+            });
+            console.log('Booking status updated to PENDING');
+          } else {
+            console.error('ERROR: No room stays found even via direct endpoint');
+            return res.status(400).json({
+              success: false,
+              error: 'Booking validation failed',
+              message: 'No room stays found after booking creation. This may indicate an issue with the booking parameters.',
+              bookingId: booking.id,
+              debug: {
+                originalBooking: booking,
+                freshBooking: freshBooking,
+                suggestion: 'Check if rateId and inventoryTypeId are valid and available for the selected dates'
+              }
+            });
           }
-        });
+        } catch (roomStaysError) {
+          console.error('Failed to fetch room stays directly:', roomStaysError.message);
+          return res.status(400).json({
+            success: false,
+            error: 'Failed to retrieve room stays',
+            message: roomStaysError.message,
+            bookingId: booking.id
+          });
+        }
       }
     } catch (statusError) {
       console.error('Failed to update booking status to PENDING:', statusError.message);
