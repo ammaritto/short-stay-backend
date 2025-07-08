@@ -7,19 +7,7 @@ const {
   getBookingPayments 
 } = require('../controllers/bookingController');
 
-// Legacy booking creation (without payment)
-router.post('/create', createBooking);
-
-// New booking creation with payment
-router.post('/create-with-payment', createBookingWithPayment);
-
-// Get booking details
-router.get('/:bookingId', getBooking);
-
-// Get booking payments
-router.get('/:bookingId/payments', getBookingPayments);
-
-// Health check for booking routes
+// Health check for booking routes (put this FIRST)
 router.get('/health', (req, res) => {
   res.json({ 
     status: 'OK',
@@ -27,10 +15,42 @@ router.get('/health', (req, res) => {
     routes: [
       'POST /create - Legacy booking creation',
       'POST /create-with-payment - New booking with payment',
-      'GET /:bookingId - Get booking details',
+      'GET /:bookingId - Get booking details (numeric ID only)',
       'GET /:bookingId/payments - Get booking payments'
     ]
   });
 });
+
+// Legacy booking creation (without payment)
+router.post('/create', createBooking);
+
+// New booking creation with payment
+router.post('/create-with-payment', createBookingWithPayment);
+
+// Get booking payments (put this BEFORE the generic /:bookingId route)
+router.get('/:bookingId/payments', (req, res, next) => {
+  // Ensure bookingId is numeric
+  if (!/^\d+$/.test(req.params.bookingId)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid booking ID',
+      message: 'Booking ID must be a number'
+    });
+  }
+  next();
+}, getBookingPayments);
+
+// Get booking details (put this LAST and add validation)
+router.get('/:bookingId', (req, res, next) => {
+  // Ensure bookingId is numeric
+  if (!/^\d+$/.test(req.params.bookingId)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid booking ID',
+      message: 'Booking ID must be a number. If you are looking for API endpoints, try /api/booking/health'
+    });
+  }
+  next();
+}, getBooking);
 
 module.exports = router;
