@@ -4,37 +4,66 @@ class ResHarmonicsService {
   constructor() {
     this.baseURL = process.env.RH_BASE_URL;
     this.authURL = process.env.RH_AUTH_URL;
-    this.username = process.env.RH_USERNAME;
-    this.password = process.env.RH_PASSWORD;
+    this.clientId = process.env.RH_CLIENT_ID;
+    this.clientSecret = process.env.RH_CLIENT_SECRET;
+    this.scope = process.env.RH_SCOPE || 'api/read api/write';
     this.accessToken = null;
     this.tokenExpiry = null;
+    
+    // Debug logging
+    console.log('RESharmonics Service initialized with:');
+    console.log('- Auth URL:', this.authURL);
+    console.log('- Base URL:', this.baseURL);
+    console.log('- Client ID exists:', !!this.clientId);
+    console.log('- Client Secret exists:', !!this.clientSecret);
+    console.log('- Scope:', this.scope);
   }
 
   async getAccessToken() {
     if (this.accessToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
+      console.log('Using cached access token');
       return this.accessToken;
     }
 
     try {
-      console.log('Fetching new access token...');
-      const response = await axios.post(this.authURL, {
-        username: this.username,
-        password: this.password
-      }, {
+      console.log('Requesting new access token using OAuth2 Client Credentials...');
+      
+      const authData = new URLSearchParams({
+        grant_type: 'client_credentials',
+        scope: this.scope
+      });
+
+      console.log('Auth request data:', {
+        grant_type: 'client_credentials',
+        scope: this.scope,
+        client_id: this.clientId?.substring(0, 5) + '...',
+        using_basic_auth: true
+      });
+      
+      const response = await axios.post(this.authURL, authData, {
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64')}`
         },
-        timeout: 10000
+        timeout: 15000
       });
 
       this.accessToken = response.data.access_token;
       this.tokenExpiry = Date.now() + (response.data.expires_in * 1000) - 60000;
       
       console.log('Access token obtained successfully');
+      console.log('Token expires in:', response.data.expires_in, 'seconds');
+      console.log('Token type:', response.data.token_type);
+      
       return this.accessToken;
     } catch (error) {
-      console.error('Authentication failed. Status:', error.response?.status);
-      console.error('Error message:', error.message);
+      console.error('OAuth2 Authentication Error:');
+      console.error('- URL:', this.authURL);
+      console.error('- Status:', error.response?.status);
+      console.error('- Status Text:', error.response?.statusText);
+      console.error('- Response data:', JSON.stringify(error.response?.data, null, 2));
+      console.error('- Request headers:', error.config?.headers);
+      console.error('- Error message:', error.message);
       
       throw new Error(`Failed to authenticate with RES:Harmonics: ${error.response?.status} ${error.response?.statusText || error.message}`);
     }
