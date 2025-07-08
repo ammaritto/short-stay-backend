@@ -1,3 +1,4 @@
+// Updated app.js - Updated documentation for new flow
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
@@ -24,12 +25,13 @@ app.get('/', (req, res) => {
   res.json({ 
     message: 'Short Stay Booking API is working!',
     timestamp: new Date().toISOString(),
-    version: '2.0.0',
+    version: '2.1.0', // Updated version
     features: [
       'Property availability search',
       'Booking creation (legacy)',
-      'Booking creation with payment processing',
-      'Payment management'
+      'Booking creation with payment processing (NEW FLOW)',
+      'Payment management',
+      'Invoice posting'
     ]
   });
 });
@@ -48,7 +50,8 @@ app.get('/api/health', (req, res) => {
     features: {
       availability: true,
       booking: true,
-      payment: true
+      payment: true,
+      invoicePosting: true
     }
   });
 });
@@ -72,7 +75,7 @@ app.get('/api/docs', (req, res) => {
       },
       booking: {
         'POST /api/booking/create': 'Create booking (legacy - enquiry only)',
-        'POST /api/booking/create-with-payment': 'Create booking with payment (confirmed)',
+        'POST /api/booking/create-with-payment': 'Create booking with payment (NEW FLOW)',
         'GET /api/booking/:bookingId': 'Get booking details',
         'GET /api/booking/:bookingId/payments': 'Get booking payments',
         'GET /api/booking/health': 'Booking service health check'
@@ -85,15 +88,29 @@ app.get('/api/docs', (req, res) => {
       }
     },
     paymentFlow: {
-      description: 'New payment-enabled booking flow',
+      description: 'NEW IMPROVED payment-enabled booking flow',
+      version: '2.1.0',
       steps: [
         '1. Customer fills booking form with payment details',
         '2. Backend creates contact in ResHarmonics',
         '3. Backend creates booking in ENQUIRY status',
-        '4. Backend processes payment through ResHarmonics',
-        '5. Backend updates booking status to CONFIRMED',
-        '6. Customer receives confirmed booking'
-      ]
+        '4. Backend updates booking status to PENDING',
+        '5. Backend retrieves and posts booking invoices',
+        '6. Backend processes payment through ResHarmonics',
+        '7. Backend updates booking status to CONFIRMED',
+        '8. Customer receives confirmed booking'
+      ],
+      improvements: [
+        'Proper status progression: ENQUIRY → PENDING → CONFIRMED',
+        'Invoice posting before payment processing',
+        'Better error handling with rollback capabilities',
+        'More detailed response data'
+      ],
+      statusFlow: {
+        ENQUIRY: 'Initial booking creation',
+        PENDING: 'Booking ready for payment processing',
+        CONFIRMED: 'Payment successful, booking confirmed'
+      }
     }
   });
 });
