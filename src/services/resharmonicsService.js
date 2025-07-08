@@ -101,8 +101,31 @@ class ResHarmonicsService {
     return await this.makeRequest('/api/v3/bookings', 'POST', bookingData);
   }
 
-  async updateBookingStatus(bookingId, statusData) {
-    return await this.makeRequest(`/api/v3/bookings/${bookingId}/updateStatuses`, 'PUT', statusData);
+  async updateBookingStatus(bookingId, statusData, userDetails = null) {
+    // The API requires user details in query parameters
+    const defaultUser = userDetails || {
+      userId: 1,
+      enabled: true,
+      username: "api_user",
+      password: "api_password",
+      authorities: [],
+      accountNonExpired: true,
+      accountNonLocked: true,
+      credentialsNonExpired: true
+    };
+
+    const queryParams = new URLSearchParams({
+      'user.userId': defaultUser.userId.toString(),
+      'user.enabled': defaultUser.enabled.toString(),
+      'user.username': defaultUser.username,
+      'user.password': defaultUser.password,
+      'user.accountNonExpired': defaultUser.accountNonExpired.toString(),
+      'user.accountNonLocked': defaultUser.accountNonLocked.toString(),
+      'user.credentialsNonExpired': defaultUser.credentialsNonExpired.toString()
+    });
+
+    const endpoint = `/api/v3/bookings/${bookingId}/updateStatuses?${queryParams.toString()}`;
+    return await this.makeRequest(endpoint, 'PUT', statusData);
   }
 
   async getBooking(bookingId) {
@@ -124,28 +147,23 @@ class ResHarmonicsService {
   async getBookingInvoices(bookingId) {
     console.log(`Fetching invoices for booking ${bookingId}`);
     try {
-      // First get the booking to find room stays
-      const booking = await this.getBooking(bookingId);
+      // Use the correct endpoint for booking invoices
+      const response = await this.makeRequest(`/api/v3/bookings/${bookingId}/salesInvoices`);
       
-      if (!booking.roomStays || booking.roomStays.length === 0) {
-        console.log('No room stays found for booking');
-        return [];
+      console.log('Invoice response structure:', JSON.stringify(response, null, 2));
+      
+      // Handle different response structures
+      let invoices = [];
+      if (response && response.content && Array.isArray(response.content)) {
+        invoices = response.content;
+      } else if (response && Array.isArray(response)) {
+        invoices = response;
+      } else if (response && response._embedded && response._embedded.salesInvoices) {
+        invoices = response._embedded.salesInvoices;
       }
-
-      // Get invoices for each room stay
-      const allInvoices = [];
-      for (const roomStay of booking.roomStays) {
-        try {
-          const roomStayInvoices = await this.makeRequest(`/api/v3/roomStays/${roomStay.id}/invoices`);
-          if (roomStayInvoices && roomStayInvoices.content) {
-            allInvoices.push(...roomStayInvoices.content);
-          }
-        } catch (error) {
-          console.warn(`Failed to get invoices for room stay ${roomStay.id}:`, error.message);
-        }
-      }
-
-      return allInvoices;
+      
+      console.log(`Found ${invoices.length} invoices for booking ${bookingId}`);
+      return invoices;
     } catch (error) {
       console.error('Failed to get booking invoices:', error.message);
       throw error;
