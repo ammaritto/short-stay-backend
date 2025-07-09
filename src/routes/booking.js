@@ -20,9 +20,98 @@ router.get('/health', (req, res) => {
       'POST /create-with-payment - New booking with payment',
       'GET /:bookingId - Get booking details (numeric ID only)',
       'GET /:bookingId/payments - Get booking payments',
-      'GET /:bookingId/test-room-stays - Test room stays retrieval'
+      'GET /:bookingId/test-room-stays - Test room stays retrieval',
+      'GET /:bookingId/debug-accounts - Debug account relationships'
     ]
   });
+});
+
+// Diagnostic endpoint to check booking account relationships
+router.get('/:bookingId/debug-accounts', async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+    
+    // Validate bookingId is numeric
+    if (!/^\d+$/.test(bookingId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid booking ID',
+        message: 'Booking ID must be a number'
+      });
+    }
+    
+    console.log(`Debugging account relationships for booking ${bookingId}`);
+    
+    const booking = await resHarmonicsService.getBooking(bookingId);
+    
+    const accountAnalysis = {
+      bookingId: bookingId,
+      bookingReference: booking.bookingReference,
+      contacts: {
+        bookingContact: {
+          id: booking.bookingContact?.id,
+          name: `${booking.bookingContact?.firstName} ${booking.bookingContact?.lastName}`,
+          email: booking.bookingContact?.emailAddress
+        },
+        billingContact: {
+          id: booking.billingContact?.id,
+          name: `${booking.billingContact?.firstName} ${booking.billingContact?.lastName}`,
+          email: booking.billingContact?.emailAddress
+        }
+      },
+      accounts: {
+        bookingAccount: {
+          id: booking.bookingAccount?.id,
+          accountCode: booking.bookingAccount?.accountCode,
+          contactId: booking.bookingAccount?.contact?.id,
+          contactName: `${booking.bookingAccount?.contact?.firstName} ${booking.bookingAccount?.contact?.lastName}`,
+          contactEmail: booking.bookingAccount?.contact?.emailAddress
+        },
+        billingAccount: {
+          id: booking.billingAccount?.id,
+          accountCode: booking.billingAccount?.accountCode,
+          contactId: booking.billingAccount?.contact?.id,
+          contactName: `${booking.billingAccount?.contact?.firstName} ${booking.billingAccount?.contact?.lastName}`,
+          contactEmail: booking.billingAccount?.contact?.emailAddress
+        }
+      },
+      analysis: {
+        contactsMatch: booking.bookingContact?.id === booking.billingContact?.id,
+        bookingAccountMatchesContact: booking.bookingAccount?.contact?.id === booking.bookingContact?.id,
+        billingAccountMatchesContact: booking.billingAccount?.contact?.id === booking.bookingContact?.id,
+        accountsMatch: booking.bookingAccount?.id === booking.billingAccount?.id
+      },
+      recommendations: []
+    };
+    
+    // Add recommendations
+    if (!accountAnalysis.analysis.contactsMatch) {
+      accountAnalysis.recommendations.push('Booking and billing contacts are different - this may be intentional');
+    }
+    if (!accountAnalysis.analysis.bookingAccountMatchesContact) {
+      accountAnalysis.recommendations.push('Booking account is linked to a different contact than the booking contact');
+    }
+    if (!accountAnalysis.analysis.billingAccountMatchesContact) {
+      accountAnalysis.recommendations.push('Billing account is linked to a different contact than the booking contact');
+    }
+    if (accountAnalysis.analysis.contactsMatch && accountAnalysis.analysis.bookingAccountMatchesContact && accountAnalysis.analysis.billingAccountMatchesContact) {
+      accountAnalysis.recommendations.push('All accounts and contacts are properly aligned');
+    }
+    
+    res.json({
+      success: true,
+      message: 'Account relationships analyzed',
+      analysis: accountAnalysis
+    });
+    
+  } catch (error) {
+    console.error('Debug accounts error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: 'Debug failed',
+      message: error.message
+    });
+  }
 });
 
 // Test endpoint to check room stays for a booking
