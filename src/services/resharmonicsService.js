@@ -74,6 +74,12 @@ class ResHarmonicsService {
         data: error.response?.data,
         message: error.message
       });
+      
+      // Log detailed validation errors if available
+      if (error.response?.data?.errors) {
+        console.error('Detailed validation errors:', JSON.stringify(error.response.data.errors, null, 2));
+      }
+      
       throw new Error(error.response?.data?.message || error.message);
     }
   }
@@ -248,6 +254,21 @@ class ResHarmonicsService {
     console.log('Creating contact with correct API structure:', JSON.stringify(contactPayload, null, 2));
     
     return await this.makeRequest('/api/v3/contacts', 'POST', contactPayload);
+  }
+
+  // NEW: Create finance account (backup option)
+  async createFinanceAccount(contactId) {
+    console.log(`Creating finance account for contact ${contactId}`);
+    try {
+      const financeAccountPayload = {
+        contactId: contactId
+      };
+      
+      return await this.makeRequest('/api/v3/financeAccounts', 'POST', financeAccountPayload);
+    } catch (error) {
+      console.error('Failed to create finance account:', error.message);
+      throw error;
+    }
   }
 }
 
