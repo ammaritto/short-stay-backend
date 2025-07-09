@@ -108,31 +108,38 @@ class ResHarmonicsService {
   }
 
   async updateBookingStatus(bookingId, statusData, userDetails = null) {
-    // The API requires user details in query parameters
-    const defaultUser = userDetails || {
-      userId: 1,
-      enabled: true,
-      username: "api_user", 
-      password: "api_password",
-      accountNonExpired: true,
-      accountNonLocked: true,
-      credentialsNonExpired: true
-    };
+    // Try without user parameters first (some ResHarmonics setups don't require them)
+    try {
+      console.log('Attempting status update without user parameters...');
+      const simpleEndpoint = `/api/v3/bookings/${bookingId}/updateStatuses`;
+      return await this.makeRequest(simpleEndpoint, 'PUT', statusData);
+    } catch (simpleError) {
+      console.log('Simple status update failed, trying with user parameters...');
+      
+      // Fallback to user parameters with minimal required fields
+      const defaultUser = userDetails || {
+        userId: 1,
+        enabled: true,
+        username: "system",
+        accountNonExpired: true,
+        accountNonLocked: true,
+        credentialsNonExpired: true
+      };
 
-    // Build query parameters - exclude authorities for now as it's causing issues
-    const queryParams = new URLSearchParams({
-      'user.userId': defaultUser.userId.toString(),
-      'user.enabled': defaultUser.enabled.toString(),
-      'user.username': defaultUser.username,
-      'user.password': defaultUser.password,
-      'user.accountNonExpired': defaultUser.accountNonExpired.toString(),
-      'user.accountNonLocked': defaultUser.accountNonLocked.toString(),
-      'user.credentialsNonExpired': defaultUser.credentialsNonExpired.toString()
-    });
+      // Build query parameters with minimal set
+      const queryParams = new URLSearchParams({
+        'user.userId': defaultUser.userId.toString(),
+        'user.enabled': defaultUser.enabled.toString(),
+        'user.username': defaultUser.username,
+        'user.accountNonExpired': defaultUser.accountNonExpired.toString(),
+        'user.accountNonLocked': defaultUser.accountNonLocked.toString(),
+        'user.credentialsNonExpired': defaultUser.credentialsNonExpired.toString()
+      });
 
-    console.log('Status update query params:', queryParams.toString());
-    const endpoint = `/api/v3/bookings/${bookingId}/updateStatuses?${queryParams.toString()}`;
-    return await this.makeRequest(endpoint, 'PUT', statusData);
+      console.log('Status update query params:', queryParams.toString());
+      const endpoint = `/api/v3/bookings/${bookingId}/updateStatuses?${queryParams.toString()}`;
+      return await this.makeRequest(endpoint, 'PUT', statusData);
+    }
   }
 
   async getBooking(bookingId) {
@@ -225,7 +232,7 @@ class ResHarmonicsService {
     return await this.makeRequest(`/api/v3/salesInvoices/${invoiceId}`);
   }
 
-  // Contact creation method
+  // Contact creation method - enhanced to try creating unique contacts
   async createContact(contactData) {
     const contactPayload = {
       firstName: contactData.firstName,
@@ -256,18 +263,15 @@ class ResHarmonicsService {
     return await this.makeRequest('/api/v3/contacts', 'POST', contactPayload);
   }
 
-  // NEW: Create finance account (backup option)
-  async createFinanceAccount(contactId) {
-    console.log(`Creating finance account for contact ${contactId}`);
+  // Check if a contact has proper finance accounts
+  async getContactFinanceAccounts(contactId) {
+    console.log(`Checking finance accounts for contact ${contactId}`);
     try {
-      const financeAccountPayload = {
-        contactId: contactId
-      };
-      
-      return await this.makeRequest('/api/v3/financeAccounts', 'POST', financeAccountPayload);
+      const response = await this.makeRequest(`/api/v3/contacts/${contactId}/financeAccounts`);
+      return response;
     } catch (error) {
-      console.error('Failed to create finance account:', error.message);
-      throw error;
+      console.warn('Failed to get contact finance accounts:', error.message);
+      return null;
     }
   }
 }
