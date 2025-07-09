@@ -1,3 +1,6 @@
+// Updated src/controllers/bookingController.js
+// NEW FLOW: Create booking -> Set PENDING -> Post invoice -> Process payment -> Set CONFIRMED
+
 const resHarmonicsService = require('../services/resharmonicsService');
 
 // Helper function to generate payment reference
@@ -101,7 +104,7 @@ const createBookingWithPayment = async (req, res) => {
       bookingFinanceAccountId: contact.id,
       billingFinanceAccountId: contact.id,
       billingFrequencyId: 1,
-      bookingTypeId: 1,
+      bookingTypeId: 5, // Changed to Short Stay (ID 5) instead of Default (ID 1)
       channelId: 1,
       
       notes: `Web booking with payment for ${guestDetails.firstName} ${guestDetails.lastName}`,
@@ -119,6 +122,7 @@ const createBookingWithPayment = async (req, res) => {
     };
 
     console.log('Creating booking with payload:', JSON.stringify(bookingPayload, null, 2));
+    console.log('Expected: All account IDs should be:', contact.id);
 
     try {
       booking = await resHarmonicsService.createBooking(bookingPayload);
@@ -140,7 +144,8 @@ const createBookingWithPayment = async (req, res) => {
       console.log('Fresh booking retrieved for status update:', JSON.stringify(freshBooking, null, 2));
       
       if (freshBooking.roomStays && freshBooking.roomStays.length > 0) {
-        roomStayId = freshBooking.roomStays[0].id;
+        // The room stay object uses 'roomStayId' field, not 'id'
+        roomStayId = freshBooking.roomStays[0].roomStayId || freshBooking.roomStays[0].id;
         console.log(`Found room stay ID: ${roomStayId}`);
         
         await resHarmonicsService.updateBookingStatus(booking.id, {
@@ -157,7 +162,7 @@ const createBookingWithPayment = async (req, res) => {
         try {
           const roomStays = await resHarmonicsService.getBookingRoomStays(booking.id);
           if (roomStays && roomStays.length > 0) {
-            roomStayId = roomStays[0].id;
+            roomStayId = roomStays[0].roomStayId || roomStays[0].id;
             console.log(`Found room stay ID via direct call: ${roomStayId}`);
             
             await resHarmonicsService.updateBookingStatus(booking.id, {
@@ -222,7 +227,7 @@ const createBookingWithPayment = async (req, res) => {
       }
       
       // Update roomStayId from the latest booking data
-      roomStayId = updatedBooking.roomStays[0].id;
+      roomStayId = updatedBooking.roomStays[0].roomStayId || updatedBooking.roomStays[0].id;
       console.log(`Confirmed room stay ID: ${roomStayId}`);
       
     } catch (getBookingError) {
@@ -321,15 +326,12 @@ const createBookingWithPayment = async (req, res) => {
         checkOut: stayDetails.endDate,
         contactId: contact.id,
         paymentReference: paymentReference,
-        paymentAmount: paymentDetails.amount, // Return original amount
-        actualPaymentProcessed: actualPaymentAmount, // Show what was actually processed
+        paymentAmount: paymentDetails.amount,
         invoicePosted: invoicePosted,
         flow: 'NEW: ENQUIRY → PENDING → INVOICE_POSTED → PAYMENT → CONFIRMED',
         debug: {
           hadRoomStays: !!(updatedBooking.roomStays && updatedBooking.roomStays.length > 0),
-          roomStayCount: updatedBooking.roomStays ? updatedBooking.roomStays.length : 0,
-          roomStayId: roomStayId,
-          testMode: paymentAmount === 0 ? 'Used 1 SEK for testing 0 amount' : 'Normal payment'
+          roomStayCount: updatedBooking.roomStays ? updatedBooking.roomStays.length : 0
         }
       }
     });
@@ -388,7 +390,7 @@ const createBooking = async (req, res) => {
       bookingFinanceAccountId: contact.id,
       billingFinanceAccountId: contact.id,
       billingFrequencyId: 1,
-      bookingTypeId: 1,
+      bookingTypeId: 5, // Changed to Short Stay (ID 5) instead of Default (ID 1)
       channelId: 1,
       
       notes: `Legacy web booking for ${guestDetails.firstName} ${guestDetails.lastName}`,
