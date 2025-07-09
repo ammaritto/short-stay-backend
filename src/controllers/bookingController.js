@@ -106,13 +106,16 @@ const createBookingWithPayment = async (req, res) => {
     }
 
     // Step 2: Create booking (will be in ENQUIRY status by default)
-    const bookingPayload = {
+    // Try different approaches to ensure proper account linkage
+    let bookingPayload;
+    
+    // First attempt: Don't specify finance account IDs - let ResHarmonics create them
+    bookingPayload = {
       bookingContactId: contact.id,
       billingContactId: contact.id,
-      bookingFinanceAccountId: contact.id, // Use contact ID directly
-      billingFinanceAccountId: contact.id, // Use contact ID directly
+      // Remove finance account IDs completely - let system auto-create proper ones
       billingFrequencyId: 1,
-      bookingTypeId: 5, // Changed to Short Stay (ID 5) instead of Default (ID 1)
+      bookingTypeId: 5, // Short Stay
       channelId: 1,
       
       notes: `Web booking with payment for ${guestDetails.firstName} ${guestDetails.lastName}`,
@@ -129,12 +132,27 @@ const createBookingWithPayment = async (req, res) => {
       }]
     };
 
-    console.log('Creating booking with payload:', JSON.stringify(bookingPayload, null, 2));
-    console.log('Expected: All account IDs should be:', contact.id, '(contact ID)');
+    console.log('Creating booking WITHOUT finance account IDs:', JSON.stringify(bookingPayload, null, 2));
 
     try {
       booking = await resHarmonicsService.createBooking(bookingPayload);
       console.log('Booking created successfully (ENQUIRY status):', booking.id);
+      
+      // Check if account mismatch still exists
+      if (booking.bookingAccount && booking.bookingAccount.contact) {
+        const bookingAccountContact = `${booking.bookingAccount.contact.firstName} ${booking.bookingAccount.contact.lastName}`;
+        const expectedContact = `${guestDetails.firstName} ${guestDetails.lastName}`;
+        
+        if (bookingAccountContact !== expectedContact) {
+          console.warn(`⚠️  ACCOUNT MISMATCH DETECTED:`);
+          console.warn(`   Expected: ${expectedContact} (Contact ID: ${contact.id})`);
+          console.warn(`   Got: ${bookingAccountContact} (Contact ID: ${booking.bookingAccount.contact.id})`);
+          console.warn(`   This may cause billing/accounting issues`);
+        } else {
+          console.log('✅ Account linkage correct');
+        }
+      }
+      
     } catch (bookingError) {
       console.error('Booking creation failed:', bookingError.message);
       return res.status(400).json({
@@ -144,7 +162,7 @@ const createBookingWithPayment = async (req, res) => {
       });
     }
 
-    // Step 3: Update booking status to PENDING
+    // Step 3: Update booking status to PENDING (explicit status management)
     let roomStayId = null;
     try {
       // First, we need to get the booking to find room stays
@@ -154,15 +172,20 @@ const createBookingWithPayment = async (req, res) => {
       if (freshBooking.roomStays && freshBooking.roomStays.length > 0) {
         // The room stay object uses 'roomStayId' field, not 'id'
         roomStayId = freshBooking.roomStays[0].roomStayId || freshBooking.roomStays[0].id;
-        console.log(`Found room stay ID: ${roomStayId}`);
+        console.log(`Found room stay ID: ${roomStayId}, current status: ${freshBooking.roomStays[0].roomStayStatus}`);
         
-        await resHarmonicsService.updateBookingStatus(booking.id, {
-          statusUpdates: [{
-            roomStayId: roomStayId,
-            status: 'PENDING'
-          }]
-        });
-        console.log('Booking status updated to PENDING');
+        // Only update to PENDING if not already CONFIRMED or higher
+        if (freshBooking.roomStays[0].roomStayStatus === 'ENQUIRY') {
+          await resHarmonicsService.updateBookingStatus(booking.id, {
+            statusUpdates: [{
+              roomStayId: roomStayId,
+              status: 'PENDING'
+            }]
+          });
+          console.log('Booking status updated from ENQUIRY to PENDING');
+        } else {
+          console.log(`Room stay already at ${freshBooking.roomStays[0].roomStayStatus} status, skipping PENDING update`);
+        }
       } else {
         console.log('No room stays in booking response, trying direct room stays endpoint...');
         
@@ -326,13 +349,25 @@ const createBookingWithPayment = async (req, res) => {
     // Step 7: Update booking status to CONFIRMED after successful payment
     try {
       if (roomStayId) {
-        await resHarmonicsService.updateBookingStatus(booking.id, {
-          statusUpdates: [{
-            roomStayId: roomStayId,
-            status: 'CONFIRMED'
-          }]
-        });
-        console.log('Booking status updated to CONFIRMED');
+        // Check current status before updating
+        const currentBooking = await resHarmonicsService.getBooking(booking.id);
+        const currentStatus = currentBooking.roomStays && currentBooking.roomStays.length > 0 
+          ? currentBooking.roomStays[0].roomStayStatus 
+          : 'UNKNOWN';
+        
+        console.log(`Current room stay status before final update: ${currentStatus}`);
+        
+        if (currentStatus !== 'CONFIRMED') {
+          await resHarmonicsService.updateBookingStatus(booking.id, {
+            statusUpdates: [{
+              roomStayId: roomStayId,
+              status: 'CONFIRMED'
+            }]
+          });
+          console.log('Booking status updated to CONFIRMED after payment');
+        } else {
+          console.log('Booking already CONFIRMED, no status update needed');
+        }
       } else {
         console.error('No room stay ID available for final status update');
       }
