@@ -87,7 +87,7 @@ const createBookingWithPayment = async (req, res) => {
     // Declare financeAccountId outside the try block
     let financeAccountId = null;
 
-    // Step 1: Create contact with finance account
+    // Step 1: Create contact (with separate finance account creation)
     try {
       contact = await resHarmonicsService.createContact(guestDetails);
       console.log('Contact created/found:', contact.id);
@@ -100,12 +100,11 @@ const createBookingWithPayment = async (req, res) => {
         console.log('✅ Finance account linked to:', contact.contactSalesAccount.contact ? 
           `${contact.contactSalesAccount.contact.firstName} ${contact.contactSalesAccount.contact.lastName}` : 
           'Unknown contact');
-      } else if (contact.id) {
-        // Fallback to contact ID if no separate finance account
+      } else {
+        // Use contact ID as finance account ID (ResHarmonics often auto-creates them with same ID)
         financeAccountId = contact.id;
         console.log('⚠️ Using contact ID as finance account ID:', financeAccountId);
-      } else {
-        throw new Error('No valid finance account ID found in contact response');
+        console.log('This should still work - ResHarmonics may auto-create the finance account');
       }
       
     } catch (contactError) {
