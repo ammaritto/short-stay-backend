@@ -84,10 +84,28 @@ const createBookingWithPayment = async (req, res) => {
     const actualPaymentAmount = paymentAmount === 0 ? 1 : paymentAmount; // Use 1 SEK for testing
     console.log(`Original amount: ${paymentAmount}, Using amount: ${actualPaymentAmount} for payment processing`);
 
-    // Step 1: Create or find contact
+    // Step 1: Create contact with finance account
     try {
       contact = await resHarmonicsService.createContact(guestDetails);
       console.log('Contact created/found:', contact.id);
+      console.log('Contact response structure:', JSON.stringify(contact, null, 2));
+      
+      // Extract finance account ID from contact response
+      let financeAccountId = null;
+      if (contact.contactSalesAccount && contact.contactSalesAccount.id) {
+        financeAccountId = contact.contactSalesAccount.id;
+        console.log('✅ Finance account created with contact:', financeAccountId);
+        console.log('✅ Finance account linked to:', contact.contactSalesAccount.contact ? 
+          `${contact.contactSalesAccount.contact.firstName} ${contact.contactSalesAccount.contact.lastName}` : 
+          'Unknown contact');
+      } else if (contact.id) {
+        // Fallback to contact ID if no separate finance account
+        financeAccountId = contact.id;
+        console.log('⚠️ Using contact ID as finance account ID:', financeAccountId);
+      } else {
+        throw new Error('No valid finance account ID found in contact response');
+      }
+      
     } catch (contactError) {
       console.error('Contact creation failed:', contactError.message);
       return res.status(400).json({
@@ -97,23 +115,12 @@ const createBookingWithPayment = async (req, res) => {
       });
     }
 
-    // Step 1.5: Check if contact has proper finance accounts (diagnostic)
-    try {
-      const financeAccounts = await resHarmonicsService.getContactFinanceAccounts(contact.id);
-      console.log('Contact finance accounts:', financeAccounts);
-    } catch (financeError) {
-      console.log('Could not retrieve finance accounts:', financeError.message);
-    }
-
-    // Step 2: Create booking (will be in ENQUIRY status by default)
-    // Try different approaches to ensure proper account linkage
-    let bookingPayload;
-    
-    // First attempt: Don't specify finance account IDs - let ResHarmonics create them
-    bookingPayload = {
+    // Step 2: Create booking with properly linked finance account
+    const bookingPayload = {
       bookingContactId: contact.id,
       billingContactId: contact.id,
-      // Remove finance account IDs completely - let system auto-create proper ones
+      bookingFinanceAccountId: financeAccountId, // Use the finance account created with contact
+      billingFinanceAccountId: financeAccountId, // Use the finance account created with contact
       billingFrequencyId: 1,
       bookingTypeId: 5, // Short Stay
       channelId: 1,
@@ -132,7 +139,9 @@ const createBookingWithPayment = async (req, res) => {
       }]
     };
 
-    console.log('Creating booking WITHOUT finance account IDs:', JSON.stringify(bookingPayload, null, 2));
+    console.log('Creating booking with properly linked finance account:', financeAccountId);
+    console.log('Expected result: All accounts should link to John Doe');
+    console.log('Full booking payload:', JSON.stringify(bookingPayload, null, 2));
 
     try {
       booking = await resHarmonicsService.createBooking(bookingPayload);
