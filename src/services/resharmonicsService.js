@@ -1,6 +1,3 @@
-// Updated src/services/resharmonicsService.js
-// Added new methods for invoice posting and booking invoice retrieval
-
 const axios = require('axios');
 
 class ResHarmonicsService {
