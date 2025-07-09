@@ -101,8 +101,9 @@ const createBookingWithPayment = async (req, res) => {
     const bookingPayload = {
       bookingContactId: contact.id,
       billingContactId: contact.id,
-      bookingFinanceAccountId: contact.id,
-      billingFinanceAccountId: contact.id,
+      // Remove explicit finance account IDs - let ResHarmonics auto-create them
+      // bookingFinanceAccountId: contact.id,  // REMOVED
+      // billingFinanceAccountId: contact.id,  // REMOVED
       billingFrequencyId: 1,
       bookingTypeId: 5, // Changed to Short Stay (ID 5) instead of Default (ID 1)
       channelId: 1,
@@ -387,8 +388,9 @@ const createBooking = async (req, res) => {
     const bookingPayload = {
       bookingContactId: contact.id,
       billingContactId: contact.id,
-      bookingFinanceAccountId: contact.id,
-      billingFinanceAccountId: contact.id,
+      // Remove explicit finance account IDs - let ResHarmonics auto-create them
+      // bookingFinanceAccountId: contact.id,  // REMOVED
+      // billingFinanceAccountId: contact.id,  // REMOVED
       billingFrequencyId: 1,
       bookingTypeId: 5, // Changed to Short Stay (ID 5) instead of Default (ID 1)
       channelId: 1,
