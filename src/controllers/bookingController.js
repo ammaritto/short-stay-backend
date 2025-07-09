@@ -97,23 +97,20 @@ const createBookingWithPayment = async (req, res) => {
       });
     }
 
-    // Step 1.5: Create finance account for the contact
-    let financeAccount = null;
+    // Step 1.5: Check if contact has proper finance accounts (diagnostic)
     try {
-      financeAccount = await resHarmonicsService.createFinanceAccount(contact.id);
-      console.log('Finance account created:', financeAccount.id);
+      const financeAccounts = await resHarmonicsService.getContactFinanceAccounts(contact.id);
+      console.log('Contact finance accounts:', financeAccounts);
     } catch (financeError) {
-      console.log('Finance account creation failed, will try using contact ID directly:', financeError.message);
-      // Fallback: some systems auto-create finance accounts with same ID as contact
-      financeAccount = { id: contact.id };
+      console.log('Could not retrieve finance accounts:', financeError.message);
     }
 
     // Step 2: Create booking (will be in ENQUIRY status by default)
     const bookingPayload = {
       bookingContactId: contact.id,
       billingContactId: contact.id,
-      bookingFinanceAccountId: financeAccount.id, // Use the created finance account
-      billingFinanceAccountId: financeAccount.id, // Use the created finance account
+      bookingFinanceAccountId: contact.id, // Use contact ID directly
+      billingFinanceAccountId: contact.id, // Use contact ID directly
       billingFrequencyId: 1,
       bookingTypeId: 5, // Changed to Short Stay (ID 5) instead of Default (ID 1)
       channelId: 1,
@@ -133,7 +130,7 @@ const createBookingWithPayment = async (req, res) => {
     };
 
     console.log('Creating booking with payload:', JSON.stringify(bookingPayload, null, 2));
-    console.log('Expected: All account IDs should be:', financeAccount.id, '(finance account for contact', contact.id, ')');
+    console.log('Expected: All account IDs should be:', contact.id, '(contact ID)');
 
     try {
       booking = await resHarmonicsService.createBooking(bookingPayload);
@@ -394,23 +391,12 @@ const createBooking = async (req, res) => {
       });
     }
 
-    // Step 1.5: Create finance account for the contact
-    let financeAccount = null;
-    try {
-      financeAccount = await resHarmonicsService.createFinanceAccount(contact.id);
-      console.log('Finance account created:', financeAccount.id);
-    } catch (financeError) {
-      console.log('Finance account creation failed, will try using contact ID directly:', financeError.message);
-      // Fallback: some systems auto-create finance accounts with same ID as contact
-      financeAccount = { id: contact.id };
-    }
-
     // Step 2: Create booking (ENQUIRY status)
     const bookingPayload = {
       bookingContactId: contact.id,
       billingContactId: contact.id,
-      bookingFinanceAccountId: financeAccount.id, // Use the created finance account
-      billingFinanceAccountId: financeAccount.id, // Use the created finance account
+      bookingFinanceAccountId: contact.id, // Use contact ID directly
+      billingFinanceAccountId: contact.id, // Use contact ID directly
       billingFrequencyId: 1,
       bookingTypeId: 5, // Changed to Short Stay (ID 5) instead of Default (ID 1)
       channelId: 1,
