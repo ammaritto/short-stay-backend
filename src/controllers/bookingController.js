@@ -254,11 +254,23 @@ const createBookingWithPayment = async (req, res) => {
       console.log('Retrieved booking invoices:', invoices);
       
       if (invoices && invoices.length > 0) {
-        // Post each invoice that's not already posted
+        // Post each unique invoice that's not already posted
+        const processedInvoiceIds = new Set(); // Track processed invoices
+        
         for (const invoice of invoices) {
+          // Skip if we've already processed this invoice ID
+          if (processedInvoiceIds.has(invoice.id)) {
+            console.log(`Skipping duplicate invoice ${invoice.id}`);
+            continue;
+          }
+          
           if (invoice.status !== 'POSTED') {
             await resHarmonicsService.postInvoice(invoice.id);
             console.log(`Invoice ${invoice.id} posted successfully`);
+            processedInvoiceIds.add(invoice.id);
+          } else {
+            console.log(`Invoice ${invoice.id} already posted, skipping`);
+            processedInvoiceIds.add(invoice.id);
           }
         }
         invoicePosted = true;
@@ -267,12 +279,19 @@ const createBookingWithPayment = async (req, res) => {
       }
     } catch (invoiceError) {
       console.error('Failed to post invoice:', invoiceError.message);
-      return res.status(400).json({
-        success: false,
-        error: 'Failed to post invoice',
-        message: invoiceError.message,
-        bookingId: booking.id
-      });
+      
+      // Don't fail the entire flow if invoice posting fails
+      if (invoiceError.message.includes('already posted')) {
+        console.log('Invoice already posted, continuing with payment...');
+        invoicePosted = true;
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'Failed to post invoice',
+          message: invoiceError.message,
+          bookingId: booking.id
+        });
+      }
     }
 
     // Step 6: Process payment
