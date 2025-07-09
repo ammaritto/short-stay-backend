@@ -1,4 +1,3 @@
-// Updated app.js - Updated documentation for new flow
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
@@ -31,7 +30,8 @@ app.get('/', (req, res) => {
       'Booking creation (legacy)',
       'Booking creation with payment processing (NEW FLOW)',
       'Payment management',
-      'Invoice posting'
+      'Invoice posting',
+      'Room stays retrieval'
     ]
   });
 });
@@ -51,7 +51,8 @@ app.get('/api/health', (req, res) => {
       availability: true,
       booking: true,
       payment: true,
-      invoicePosting: true
+      invoicePosting: true,
+      roomStaysRetrieval: true
     }
   });
 });
@@ -78,6 +79,7 @@ app.get('/api/docs', (req, res) => {
         'POST /api/booking/create-with-payment': 'Create booking with payment (NEW FLOW)',
         'GET /api/booking/:bookingId': 'Get booking details',
         'GET /api/booking/:bookingId/payments': 'Get booking payments',
+        'GET /api/booking/:bookingId/test-room-stays': 'Test room stays retrieval',
         'GET /api/booking/health': 'Booking service health check'
       },
       general: {
@@ -94,22 +96,28 @@ app.get('/api/docs', (req, res) => {
         '1. Customer fills booking form with payment details',
         '2. Backend creates contact in ResHarmonics',
         '3. Backend creates booking in ENQUIRY status',
-        '4. Backend updates booking status to PENDING',
-        '5. Backend retrieves and posts booking invoices',
-        '6. Backend processes payment through ResHarmonics',
-        '7. Backend updates booking status to CONFIRMED',
-        '8. Customer receives confirmed booking'
+        '4. Backend retrieves room stays (separate endpoint if needed)',
+        '5. Backend updates booking status to PENDING',
+        '6. Backend retrieves and posts booking invoices',
+        '7. Backend processes payment through ResHarmonics',
+        '8. Backend updates booking status to CONFIRMED',
+        '9. Customer receives confirmed booking'
       ],
       improvements: [
         'Proper status progression: ENQUIRY → PENDING → CONFIRMED',
+        'Room stays fetched via separate endpoint if needed',
         'Invoice posting before payment processing',
         'Better error handling with rollback capabilities',
-        'More detailed response data'
+        'More detailed response data',
+        'Test endpoints for debugging'
       ],
       statusFlow: {
         ENQUIRY: 'Initial booking creation',
         PENDING: 'Booking ready for payment processing',
         CONFIRMED: 'Payment successful, booking confirmed'
+      },
+      testEndpoints: {
+        'GET /api/booking/:bookingId/test-room-stays': 'Test if room stays can be retrieved for debugging'
       }
     }
   });
@@ -130,7 +138,8 @@ app.use((req, res) => {
       'POST /api/booking/create',
       'POST /api/booking/create-with-payment',
       'GET /api/booking/:bookingId',
-      'GET /api/booking/:bookingId/payments'
+      'GET /api/booking/:bookingId/payments',
+      'GET /api/booking/:bookingId/test-room-stays'
     ]
   });
 });
