@@ -1,3 +1,6 @@
+// Updated src/services/resharmonicsService.js
+// Added new methods for invoice posting and booking invoice retrieval
+
 const axios = require('axios');
 
 class ResHarmonicsService {
@@ -103,14 +106,14 @@ class ResHarmonicsService {
     const defaultUser = userDetails || {
       userId: 1,
       enabled: true,
-      username: "api_user",
+      username: "api_user", 
       password: "api_password",
-      authorities: [],
       accountNonExpired: true,
       accountNonLocked: true,
       credentialsNonExpired: true
     };
 
+    // Build query parameters - exclude authorities for now as it's causing issues
     const queryParams = new URLSearchParams({
       'user.userId': defaultUser.userId.toString(),
       'user.enabled': defaultUser.enabled.toString(),
@@ -121,6 +124,7 @@ class ResHarmonicsService {
       'user.credentialsNonExpired': defaultUser.credentialsNonExpired.toString()
     });
 
+    console.log('Status update query params:', queryParams.toString());
     const endpoint = `/api/v3/bookings/${bookingId}/updateStatuses?${queryParams.toString()}`;
     return await this.makeRequest(endpoint, 'PUT', statusData);
   }
