@@ -1,6 +1,3 @@
-// Updated src/controllers/bookingController.js
-// NEW FLOW: Create booking -> Set PENDING -> Post invoice -> Process payment -> Set CONFIRMED
-
 const resHarmonicsService = require('../services/resharmonicsService');
 
 // Helper function to generate payment reference
@@ -324,12 +321,15 @@ const createBookingWithPayment = async (req, res) => {
         checkOut: stayDetails.endDate,
         contactId: contact.id,
         paymentReference: paymentReference,
-        paymentAmount: paymentDetails.amount,
+        paymentAmount: paymentDetails.amount, // Return original amount
+        actualPaymentProcessed: actualPaymentAmount, // Show what was actually processed
         invoicePosted: invoicePosted,
         flow: 'NEW: ENQUIRY → PENDING → INVOICE_POSTED → PAYMENT → CONFIRMED',
         debug: {
           hadRoomStays: !!(updatedBooking.roomStays && updatedBooking.roomStays.length > 0),
-          roomStayCount: updatedBooking.roomStays ? updatedBooking.roomStays.length : 0
+          roomStayCount: updatedBooking.roomStays ? updatedBooking.roomStays.length : 0,
+          roomStayId: roomStayId,
+          testMode: paymentAmount === 0 ? 'Used 1 SEK for testing 0 amount' : 'Normal payment'
         }
       }
     });
