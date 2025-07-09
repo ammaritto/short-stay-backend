@@ -84,6 +84,9 @@ const createBookingWithPayment = async (req, res) => {
     const actualPaymentAmount = paymentAmount === 0 ? 1 : paymentAmount; // Use 1 SEK for testing
     console.log(`Original amount: ${paymentAmount}, Using amount: ${actualPaymentAmount} for payment processing`);
 
+    // Declare financeAccountId outside the try block
+    let financeAccountId = null;
+
     // Step 1: Create contact with finance account
     try {
       contact = await resHarmonicsService.createContact(guestDetails);
@@ -91,7 +94,6 @@ const createBookingWithPayment = async (req, res) => {
       console.log('Contact response structure:', JSON.stringify(contact, null, 2));
       
       // Extract finance account ID from contact response
-      let financeAccountId = null;
       if (contact.contactSalesAccount && contact.contactSalesAccount.id) {
         financeAccountId = contact.contactSalesAccount.id;
         console.log('✅ Finance account created with contact:', financeAccountId);
