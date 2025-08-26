@@ -303,7 +303,7 @@ const createBookingWithPayment = async (req, res) => {
       phone: guestDetails.phone || '',
       checkIn: stayDetails.startDate,
       checkOut: stayDetails.endDate,
-      propertyInfo: `${unitDetails.buildingName || 'Property'} - ${unitDetails.inventoryTypeName || unitDetails.rateName || 'Unit'}`,
+      propertyInfo: `${unitDetails.inventoryTypeName || 'Studio'} at ${unitDetails.buildingName || 'Property'}`,
       totalFee: paymentAmount,
       currency: stripeVerification.currency,
       bookingReference: booking.bookingReference,
