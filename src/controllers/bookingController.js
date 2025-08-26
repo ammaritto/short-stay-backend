@@ -45,48 +45,6 @@ const sendToZapier = async (bookingData) => {
     return { success: false, error: error.message };
   }
 };
-const axios = require('axios');
-
-// Zapier webhook URL
-const ZAPIER_WEBHOOK_URL = 'https://hooks.zapier.com/hooks/catch/10018240/ut0ho3w/';
-
-// Function to send data to Zapier webhook
-const sendToZapier = async (bookingData) => {
-  try {
-    console.log('Sending booking data to Zapier webhook...');
-    
-    const webhookPayload = {
-      Name: bookingData.firstName,
-      Surname: bookingData.lastName,
-      EmailAddress: bookingData.email,
-      PhoneNumber: bookingData.phone || '',
-      CheckInDate: bookingData.checkIn,
-      CheckOutDate: bookingData.checkOut,
-      PropertyInfo: bookingData.propertyInfo,
-      TotalFee: bookingData.totalFee,
-      Currency: bookingData.currency,
-      BookingReference: bookingData.bookingReference,
-      PaymentReference: bookingData.paymentReference,
-      BookingId: bookingData.bookingId
-    };
-
-    console.log('Webhook payload:', JSON.stringify(webhookPayload, null, 2));
-
-    const response = await axios.post(ZAPIER_WEBHOOK_URL, webhookPayload, {
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      timeout: 10000 // 10 second timeout
-    });
-
-    console.log('✅ Zapier webhook sent successfully:', response.status);
-    return { success: true, status: response.status };
-
-  } catch (error) {
-    console.error('❌ Failed to send Zapier webhook:', error.message);
-    return { success: false, error: error.message };
-  }
-};
 
 // UPDATED MAIN FUNCTION: Create booking with Stripe payment only
 const createBookingWithPayment = async (req, res) => {
