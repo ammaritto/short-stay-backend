@@ -169,7 +169,7 @@ const createBookingWithPayment = async (req, res) => {
       roomStays: [{
         startDate: stayDetails.startDate,
         endDate: stayDetails.endDate,
-        numberOfAdults: parseInt(stayDetails.guests),
+        numberOfGuests: parseInt(stayDetails.guests),
         numberOfChildren: 0,
         numberOfInfants: 0,
         rateId: unitDetails.rateId,
@@ -399,7 +399,7 @@ const createBooking = async (req, res) => {
       roomStays: [{
         startDate: stayDetails.startDate,
         endDate: stayDetails.endDate,
-        numberOfAdults: parseInt(stayDetails.guests),
+        numberOfGuests: parseInt(stayDetails.guests),
         numberOfChildren: 0,
         numberOfInfants: 0,
         rateId: unitDetails.rateId,
