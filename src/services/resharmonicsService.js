@@ -86,7 +86,7 @@ class ResHarmonicsService {
 
   // Availability methods
   async searchAvailability(searchParams) {
-    const webRateCodes = ['BRO-SP-WEB', 'BRO-S-WEB', 'ANG-S-WEB'];
+    const webRateCodes = ['BRO-SP-WEB', 'BRO-S-WEB', 'ANG-S-WEB', 'BRO-SM-WEB'];
     console.log('Searching availability for WEB rate codes:', webRateCodes);
     
     const allResults = [];
